@@ -88,9 +88,10 @@ def load_mnist_labels(filepath):
 
 
 # Build path to the MNIST archive relative to this script's location.
-# Folder structure:  <script_dir>/HW4 Autoencoder/archive/
+# Folder structure:  <script_dir>/archive/
+# (HW_4.py lives inside the HW4 Autoencoder/ folder alongside the archive/)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR   = os.path.join(SCRIPT_DIR, "HW4 Autoencoder", "archive")
+DATA_DIR   = os.path.join(SCRIPT_DIR, "archive")
 
 train_images = load_mnist_images(os.path.join(DATA_DIR, "train-images.idx3-ubyte"))
 train_labels = load_mnist_labels(os.path.join(DATA_DIR, "train-labels.idx1-ubyte"))
