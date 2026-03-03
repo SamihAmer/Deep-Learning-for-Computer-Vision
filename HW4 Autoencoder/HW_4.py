@@ -9,10 +9,10 @@ Assignment tasks:
         Plot MSE learning curves (train / validation / test) vs. epoch.
         Evaluate reconstruction MSE specifically on digit "3".
   Q1-2. For 10 and 20 hidden units, visualize each encoder neuron's incoming
-        weights as a 28×28 image (reveals what features each neuron detects).
+        weights as a 28x28 image (reveals what features each neuron detects).
 
 Architecture (3-layer MLP, symmetric autoencoder):
-  Layer L1 (Input)  : 784 units  ← flattened 28×28 MNIST image
+  Layer L1 (Input)  : 784 units  ← flattened 28x28 MNIST image
   Layer L2 (Hidden) : N units    ← bottleneck / latent representation
   Layer L3 (Output) : 784 units  → reconstructed image
 
@@ -30,6 +30,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DEVICE SELECTION
@@ -561,6 +563,82 @@ plt.savefig('digit3_reconstructions.png', dpi=150)
 plt.close()
 print("Saved: digit3_reconstructions.png")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 11 — CONFUSION MATRICES (classification via latent codes)
+#
+# An autoencoder is unsupervised, but its encoder compresses the input into
+# a latent representation that captures digit structure.  We assess this by:
+#   1. Encoding all train/test images through the (frozen) encoder.
+#   2. Fitting a logistic regression on the encoded TRAINING features + labels.
+#   3. Predicting on encoded TEST features and plotting a confusion matrix.
+#
+# The confusion matrix shows which digits get mistaken for which — off-diagonal
+# entries reveal systematic confusions (e.g., 4 ↔ 9, 3 ↔ 8).
+# Better bottleneck representations → higher classification accuracy.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_latent_codes(model, images):
+    """
+    Pass images through the encoder and return latent codes as numpy.
+
+    Parameters
+    ----------
+    model  : trained Autoencoder
+    images : np.ndarray, shape (N, 784)
+
+    Returns
+    -------
+    codes : np.ndarray, shape (N, hidden_units)
+    """
+    model.eval()
+    with torch.no_grad():
+        tensor = torch.from_numpy(images).to(device)
+        codes  = model.encoder(tensor).cpu().numpy()
+    return codes
+
+
+print("\n--- Confusion Matrices (logistic regression on latent codes) ---")
+
+n_cols_cm = 3
+n_rows_cm = (len(HIDDEN_UNITS_LIST) + n_cols_cm - 1) // n_cols_cm
+
+fig, axes = plt.subplots(n_rows_cm, n_cols_cm,
+                         figsize=(6 * n_cols_cm, 5.5 * n_rows_cm))
+axes = np.array(axes).flatten()
+
+for idx, h in enumerate(HIDDEN_UNITS_LIST):
+    model = all_results[h][0]
+
+    # Encode all images into latent space using the frozen encoder
+    train_codes = extract_latent_codes(model, train_images)
+    test_codes  = extract_latent_codes(model, test_images)
+
+    # Logistic regression on the latent codes (no retraining of the autoencoder)
+    clf = LogisticRegression(max_iter=1000, random_state=42)
+    clf.fit(train_codes, train_labels)
+
+    preds = clf.predict(test_codes)
+    acc   = (preds == test_labels).mean() * 100
+
+    # Plot confusion matrix
+    cm   = confusion_matrix(test_labels, preds)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                                  display_labels=list(range(10)))
+    disp.plot(ax=axes[idx], colorbar=False, cmap='Blues')
+    axes[idx].set_title(f'h = {h}  |  Acc = {acc:.1f}%', fontsize=11)
+    print(f"  h = {h:3d} hidden units → test accuracy: {acc:.2f}%")
+
+for idx in range(len(HIDDEN_UNITS_LIST), len(axes)):
+    axes[idx].set_visible(False)
+
+fig.suptitle('Digit Classification Confusion Matrices\n'
+             '(Logistic Regression on Encoder Latent Codes)', fontsize=14)
+plt.tight_layout()
+plt.savefig('confusion_matrices.png', dpi=150)
+plt.close()
+print("Saved: confusion_matrices.png")
+
+
 print("\n=== All tasks complete! ===")
 print("Output files:")
 print("  learning_curves.png         — MSE vs epoch for all bottleneck sizes")
@@ -568,3 +646,4 @@ print("  digit3_mse_vs_hidden.png    — bar chart of digit-3 reconstruction MSE
 print("  encoder_weights_10units.png — 10 encoder weight images (28×28 each)")
 print("  encoder_weights_20units.png — 20 encoder weight images (28×28 each)")
 print("  digit3_reconstructions.png  — original vs reconstructed digit 3")
+print("  confusion_matrices.png      — per-bottleneck confusion matrices")
