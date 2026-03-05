@@ -14,7 +14,7 @@ Assignment tasks:
 Architecture (3-layer MLP, symmetric autoencoder):
   Layer L1 (Input)  : 784 units  ← flattened 28x28 MNIST image
   Layer L2 (Hidden) : N units    ← bottleneck / latent representation
-  Layer L3 (Output) : 784 units  → reconstructed image
+  Layer L3 (Output) : 784 units  -> reconstructed image
 
 Loss function: Mean Squared Error (MSE)
 Optimizer:     Adam
@@ -30,15 +30,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DEVICE SELECTION
-# torch.cuda.is_available() returns True when a CUDA GPU is present.
-# On your Mac this will be False (CPU); on your PC with NVIDIA GPU it will be
-# True and training will automatically use the GPU for speed.
-# ─────────────────────────────────────────────────────────────────────────────
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -50,9 +42,7 @@ print(f"Using device: {device}")
 #   Images file (IDX3): magic(4B) | num_images(4B) | rows(4B) | cols(4B) | pixels
 #   Labels file (IDX1): magic(4B) | num_labels(4B) | labels
 # All multi-byte integers are big-endian ('>I' in Python struct).
-# Pixel values are uint8 in [0, 255]; we normalize to float32 in [0, 1].
-# ─────────────────────────────────────────────────────────────────────────────
-
+# Pixel values are uint8 in [0, 255]; I normalize to float32 in [0, 1].
 def load_mnist_images(filepath):
     """
     Read an MNIST IDX3-ubyte image file.
@@ -68,7 +58,7 @@ def load_mnist_images(filepath):
         # Read all remaining bytes as pixel data
         raw = np.frombuffer(f.read(), dtype=np.uint8)
 
-    # Reshape to (N, 784) and scale pixels from [0,255] → [0,1]
+    # Reshape to (N, 784) and scale pixels from [0,255] -> [0,1]
     images = raw.reshape(num_images, rows * cols).astype(np.float32) / 255.0
     return images
 
@@ -90,8 +80,6 @@ def load_mnist_labels(filepath):
 
 
 # Build path to the MNIST archive relative to this script's location.
-# Folder structure:  <script_dir>/archive/
-# (HW_4.py lives inside the HW4 Autoencoder/ folder alongside the archive/)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR   = os.path.join(SCRIPT_DIR, "archive")
 
@@ -102,15 +90,12 @@ test_labels  = load_mnist_labels(os.path.join(DATA_DIR, "t10k-labels.idx1-ubyte"
 
 print(f"Loaded — Train: {train_images.shape}  Test: {test_images.shape}")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 2 — TRAIN / VALIDATION SPLIT
 #
 # The assignment says use 20% of the 60,000 training images for validation
-# and 80% for training.  We shuffle first so every digit class is represented
+# and 80% for training.  I shuffle first so every digit class is represented
 # proportionally in both sets.
-# ─────────────────────────────────────────────────────────────────────────────
-
 VAL_RATIO = 0.20
 N_total   = len(train_images)               # 60 000
 N_val     = int(N_total * VAL_RATIO)        # 12 000
@@ -122,7 +107,7 @@ shuffle_idx  = np.random.permutation(N_total)
 train_images = train_images[shuffle_idx]
 train_labels = train_labels[shuffle_idx]
 
-# First N_val samples → validation; rest → training
+# First N_val samples -> validation; rest -> training
 val_images   = train_images[:N_val]
 val_labels   = train_labels[:N_val]
 train_images = train_images[N_val:]
@@ -130,14 +115,12 @@ train_labels = train_labels[N_val:]
 
 print(f"Split  — Train: {train_images.shape[0]}  Val: {val_images.shape[0]}  Test: {test_images.shape[0]}")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 3 — PYTORCH DATALOADERS
 #
 # PyTorch DataLoader handles batching and (optionally) shuffling for us.
 # For an autoencoder the TARGET equals the INPUT — we want to reconstruct x.
 # So TensorDataset(x, x) gives (input, target) pairs where both are the image.
-# ─────────────────────────────────────────────────────────────────────────────
 
 BATCH_SIZE = 256   # number of images processed per gradient update step
 
@@ -149,11 +132,11 @@ def make_loader(images, shuffle=True):
     The dataset yields (x, x) pairs because the autoencoder reconstructs
     its own input — there are no separate labels needed for training.
     """
-    tensor  = torch.from_numpy(images)        # convert numpy → torch tensor
+    tensor  = torch.from_numpy(images)        # convert numpy -> torch tensor
     dataset = TensorDataset(tensor, tensor)   # (input, target) = (x, x)
     return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=shuffle,
                       num_workers=0, pin_memory=(device.type == "cuda"))
-    # pin_memory=True speeds up CPU→GPU transfers on CUDA machines
+    # pin_memory=True speeds up CPU->GPU transfers on CUDA machines
 
 
 train_loader = make_loader(train_images, shuffle=True)   # shuffle every epoch
@@ -165,8 +148,8 @@ test_loader  = make_loader(test_images,  shuffle=False)
 # SECTION 4 — AUTOENCODER MODEL
 #
 # A 3-layer MLP autoencoder has:
-#   Encoder: Linear(784 → N) + Sigmoid activation
-#   Decoder: Linear(N → 784) + Sigmoid activation
+#   Encoder: Linear(784 -> N) + Sigmoid activation
+#   Decoder: Linear(N -> 784) + Sigmoid activation
 #
 # Why Sigmoid?
 #   • Hidden layer: compresses features into (0, 1) range, enforcing a compact
@@ -178,7 +161,6 @@ test_loader  = make_loader(test_images,  shuffle=False)
 # Row i of W1 = the 784 weights converging onto hidden neuron i.
 # Reshaping row i to 28×28 gives the "receptive field" of neuron i — what
 # visual pattern it has learned to respond to (course notes pp. 78–79).
-# ─────────────────────────────────────────────────────────────────────────────
 
 class Autoencoder(nn.Module):
     def __init__(self, hidden_units: int):
@@ -209,7 +191,7 @@ class Autoencoder(nn.Module):
 
     def forward(self, x):
         """
-        Full autoencoder pass: x → encoder → latent code → decoder → x̂
+        Full autoencoder pass: x -> encoder -> latent code -> decoder -> x̂
 
         Parameters
         ----------
@@ -219,8 +201,8 @@ class Autoencoder(nn.Module):
         -------
         recon : Tensor, shape (batch, 784)  — reconstructed images
         """
-        latent = self.encoder(x)   # compress: 784 → hidden_units
-        recon  = self.decoder(latent)  # reconstruct: hidden_units → 784
+        latent = self.encoder(x)   # compress: 784 -> hidden_units
+        recon  = self.decoder(latent)  # reconstruct: hidden_units -> 784
         return recon
 
     def get_encoder_weights(self):
@@ -237,13 +219,12 @@ class Autoencoder(nn.Module):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 5 — TRAINING & EVALUATION HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_mse_on_loader(model, criterion, loader):
     """
     Compute the average MSE over every batch in a DataLoader.
 
-    We use torch.no_grad() during evaluation to:
+    I use torch.no_grad() during evaluation to:
       1. Skip gradient computation (saves memory and time)
       2. Ensure model weights are not accidentally updated
     """
@@ -321,7 +302,7 @@ def train_autoencoder(hidden_units, num_epochs=50, lr=1e-3):
 
     for epoch in range(1, num_epochs + 1):
 
-        # ── Training phase ───────────────────────────────────────────────────
+        # Training phase 
         model.train()   # enables dropout/batchnorm if present (not used here,
                         # but good habit to always call model.train() before training)
         running_loss = 0.0
@@ -341,7 +322,7 @@ def train_autoencoder(hidden_units, num_epochs=50, lr=1e-3):
         # Average loss over all training samples
         train_loss = running_loss / len(train_loader.dataset)
 
-        # ── Evaluation phase ─────────────────────────────────────────────────
+        # Evaluation phase 
         # Evaluate on validation and test sets after each epoch
         val_loss  = compute_mse_on_loader(model, criterion, val_loader)
         test_loss = compute_mse_on_loader(model, criterion, test_loader)
@@ -363,13 +344,9 @@ def train_autoencoder(hidden_units, num_epochs=50, lr=1e-3):
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 6 — RUN ALL EXPERIMENTS
 #
-# We train one autoencoder per hidden-unit count and store everything for
+# I train one autoencoder per hidden-unit count and store everything for
 # downstream plotting and analysis.
-# NOTE: 20 is added (not in the MSE-curve list of 5/10/30/60/120) because
-# Q1-2 asks to visualize weights for 10 AND 20 hidden units.
-# ─────────────────────────────────────────────────────────────────────────────
-
-HIDDEN_UNITS_LIST = [5, 10, 20, 30, 60, 120]  # bottleneck sizes to experiment with
+HIDDEN_UNITS_LIST = [5, 10, 20, 30, 60, 120]  # bottleneck sizes 
 NUM_EPOCHS        = 50                          # training epochs per model
 
 criterion = nn.MSELoss()   # shared loss function for all evaluations
@@ -390,7 +367,7 @@ for h in HIDDEN_UNITS_LIST:
     # (the assignment asks us to compare reconstruction quality for digit 3)
     mse3 = compute_mse_for_digit(model, criterion, test_images, test_labels, digit=3)
     digit3_mse[h] = mse3
-    print(f"  → Digit-3 Test MSE ({h} hidden units): {mse3:.6f}")
+    print(f"  -> Digit-3 Test MSE ({h} hidden units): {mse3:.6f}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -402,9 +379,8 @@ for h in HIDDEN_UNITS_LIST:
 #   green  = test MSE         (dotted)
 #
 # Comparing train vs. val/test curves reveals overfitting:
-#   • If train MSE keeps dropping but val/test plateau → overfitting
-#   • If all three curves decrease together → good generalization
-# ─────────────────────────────────────────────────────────────────────────────
+#   - If train MSE keeps dropping but val/test plateau -> overfitting
+#   - If all three curves decrease together -> good generalization
 
 epochs = range(1, NUM_EPOCHS + 1)
 n_plots = len(HIDDEN_UNITS_LIST)
@@ -445,9 +421,8 @@ print("\nSaved: learning_curves.png")
 # SECTION 8 — PLOT: Digit-3 MSE vs. Bottleneck Size (bar chart)
 #
 # This summarizes the final reconstruction quality for digit "3" across all
-# bottleneck sizes.  More hidden units → more representational capacity →
+# bottleneck sizes.  More hidden units -> more representational capacity ->
 # lower reconstruction error (up to a point).
-# ─────────────────────────────────────────────────────────────────────────────
 
 hs   = list(digit3_mse.keys())
 mses = list(digit3_mse.values())
@@ -484,9 +459,6 @@ print("Saved: digit3_mse_vs_hidden.png")
 # With only 10 units the network must compress MNIST into 10 features, so
 # each weight image tends to look like a broad, prototypical digit shape.
 # With 20 units the features become more fine-grained.
-# (See course notes pp. 78–79)
-# ─────────────────────────────────────────────────────────────────────────────
-
 for h in [10, 20]:
     model = all_results[h][0]
     W = model.get_encoder_weights()   # shape: (h, 784)
@@ -507,7 +479,7 @@ for h in [10, 20]:
     axes = np.array(axes).flatten()
 
     for i in range(h):
-        weight_img = W_norm[i].reshape(28, 28)   # 784-d vector → 28×28 image
+        weight_img = W_norm[i].reshape(28, 28)   # 784-d vector -> 28×28 image
         axes[i].imshow(weight_img, cmap='gray', vmin=0, vmax=1)
         axes[i].set_title(f'Neuron {i + 1}', fontsize=8)
         axes[i].axis('off')
@@ -516,7 +488,7 @@ for h in [10, 20]:
     for i in range(h, len(axes)):
         axes[i].set_visible(False)
 
-    fig.suptitle(f'Encoder Weights Visualized as 28×28 Images  ({h} hidden units)',
+    fig.suptitle(f'Encoder Weights Visualized as 28x28 Images  ({h} hidden units)',
                  fontsize=12)
     plt.tight_layout()
     fname = f'encoder_weights_{h}units.png'
@@ -531,12 +503,11 @@ for h in [10, 20]:
 # Pick one "3" from the test set and run it through every trained model.
 # Displays the original alongside each reconstruction — you can visually see
 # how more hidden units produce sharper, more accurate reconstructions.
-# ─────────────────────────────────────────────────────────────────────────────
 
 # Find the first digit-3 in the test set
 digit3_idx = np.where(test_labels == 3)[0][0]
 sample_img = torch.from_numpy(test_images[digit3_idx]).unsqueeze(0).to(device)
-# unsqueeze(0) adds a batch dimension: shape (784,) → (1, 784)
+# unsqueeze(0) adds a batch dimension: shape (784,) -> (1, 784)
 
 n_models = len(HIDDEN_UNITS_LIST)
 fig, axes = plt.subplots(1, n_models + 1, figsize=(3.0 * (n_models + 1), 3.2))
@@ -563,87 +534,9 @@ plt.savefig('digit3_reconstructions.png', dpi=150)
 plt.close()
 print("Saved: digit3_reconstructions.png")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 11 — CONFUSION MATRICES (classification via latent codes)
-#
-# An autoencoder is unsupervised, but its encoder compresses the input into
-# a latent representation that captures digit structure.  We assess this by:
-#   1. Encoding all train/test images through the (frozen) encoder.
-#   2. Fitting a logistic regression on the encoded TRAINING features + labels.
-#   3. Predicting on encoded TEST features and plotting a confusion matrix.
-#
-# The confusion matrix shows which digits get mistaken for which — off-diagonal
-# entries reveal systematic confusions (e.g., 4 ↔ 9, 3 ↔ 8).
-# Better bottleneck representations → higher classification accuracy.
-# ─────────────────────────────────────────────────────────────────────────────
-
-def extract_latent_codes(model, images):
-    """
-    Pass images through the encoder and return latent codes as numpy.
-
-    Parameters
-    ----------
-    model  : trained Autoencoder
-    images : np.ndarray, shape (N, 784)
-
-    Returns
-    -------
-    codes : np.ndarray, shape (N, hidden_units)
-    """
-    model.eval()
-    with torch.no_grad():
-        tensor = torch.from_numpy(images).to(device)
-        codes  = model.encoder(tensor).cpu().numpy()
-    return codes
-
-
-print("\n--- Confusion Matrices (logistic regression on latent codes) ---")
-
-n_cols_cm = 3
-n_rows_cm = (len(HIDDEN_UNITS_LIST) + n_cols_cm - 1) // n_cols_cm
-
-fig, axes = plt.subplots(n_rows_cm, n_cols_cm,
-                         figsize=(6 * n_cols_cm, 5.5 * n_rows_cm))
-axes = np.array(axes).flatten()
-
-for idx, h in enumerate(HIDDEN_UNITS_LIST):
-    model = all_results[h][0]
-
-    # Encode all images into latent space using the frozen encoder
-    train_codes = extract_latent_codes(model, train_images)
-    test_codes  = extract_latent_codes(model, test_images)
-
-    # Logistic regression on the latent codes (no retraining of the autoencoder)
-    clf = LogisticRegression(max_iter=1000, random_state=42)
-    clf.fit(train_codes, train_labels)
-
-    preds = clf.predict(test_codes)
-    acc   = (preds == test_labels).mean() * 100
-
-    # Plot confusion matrix
-    cm   = confusion_matrix(test_labels, preds)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm,
-                                  display_labels=list(range(10)))
-    disp.plot(ax=axes[idx], colorbar=False, cmap='Blues')
-    axes[idx].set_title(f'h = {h}  |  Acc = {acc:.1f}%', fontsize=11)
-    print(f"  h = {h:3d} hidden units → test accuracy: {acc:.2f}%")
-
-for idx in range(len(HIDDEN_UNITS_LIST), len(axes)):
-    axes[idx].set_visible(False)
-
-fig.suptitle('Digit Classification Confusion Matrices\n'
-             '(Logistic Regression on Encoder Latent Codes)', fontsize=14)
-plt.tight_layout()
-plt.savefig('confusion_matrices.png', dpi=150)
-plt.close()
-print("Saved: confusion_matrices.png")
-
-
-print("\n=== All tasks complete! ===")
 print("Output files:")
 print("  learning_curves.png         — MSE vs epoch for all bottleneck sizes")
 print("  digit3_mse_vs_hidden.png    — bar chart of digit-3 reconstruction MSE")
-print("  encoder_weights_10units.png — 10 encoder weight images (28×28 each)")
-print("  encoder_weights_20units.png — 20 encoder weight images (28×28 each)")
+print("  encoder_weights_10units.png — 10 encoder weight images (28x28 each)")
+print("  encoder_weights_20units.png — 20 encoder weight images (28x28 each)")
 print("  digit3_reconstructions.png  — original vs reconstructed digit 3")
-print("  confusion_matrices.png      — per-bottleneck confusion matrices")
