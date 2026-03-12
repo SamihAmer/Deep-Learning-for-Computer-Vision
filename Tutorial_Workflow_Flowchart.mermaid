@@ -1,0 +1,35 @@
+graph TD
+    A["WorkflowManager.TryRunWorkflow(tutorialWorkflow)"] --> B["WorkflowDriver.RunWorkflow()"]
+    B --> C["Workflow.Initialize()"]
+    C --> D["For each child step:<br/>WorkflowStep.Initialize()"]
+    D --> E["WorkflowTaskFactory.CreateWorkflowTask()<br/><i>Creates your custom task instance</i>"]
+    E --> F["WorkflowDriver loads first step"]
+
+    F --> G["Step.PopulateElementActivationStates()<br/><i>Collects UI states to enable/disable</i>"]
+    G --> H["UIStateManager.SetElementActivators()<br/><i>Hides/shows UI elements</i>"]
+    H --> I["Step.Begin()"]
+    I --> J["WorkflowTask.Begin()<br/><i>Your task starts monitoring for gestures</i>"]
+
+    J --> K{"User performs<br/>gesture?"}
+    K -->|"No"| L["Keep monitoring...<br/><i>Events from InteractionController</i>"]
+    L --> K
+    K -->|"Yes"| M["Your task sets<br/>IsCompleted = true"]
+    M --> N["CheckIsCompleted()<br/>fires TaskCompleted event"]
+    N --> O["WorkflowStep receives<br/>WorkflowStepCompleted"]
+
+    O --> P{"AutoNext<br/>= true?"}
+    P -->|"Yes"| Q["WorkflowDriver.TryLoadNextStep()"]
+    P -->|"No"| R["Wait for user to<br/>press Next button"]
+    R --> Q
+
+    Q --> S{"More steps?"}
+    S -->|"Yes"| F
+    S -->|"No"| T["WorkflowDriver fires<br/>WorkflowEnded event"]
+    T --> U["UIStateManager restores<br/>previous UI state"]
+
+    style A fill:#1B3A5C,color:#fff
+    style E fill:#007A7A,color:#fff
+    style J fill:#007A7A,color:#fff
+    style M fill:#1B7A3D,color:#fff
+    style T fill:#1B3A5C,color:#fff
+    style K fill:#E65C00,color:#fff
