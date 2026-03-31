@@ -62,16 +62,17 @@ def sliding_window_inference(
     vol_shape = volume.shape  # (D, H, W)
     pD, pH, pW = patch_size
     step = tuple(int(p * (1 - overlap)) for p in patch_size)
+    dev = torch.device(device)
 
-    # Initialize accumulators
-    pred_sum = np.zeros((num_classes, *vol_shape), dtype=np.float32)
-    weight_sum = np.zeros(vol_shape, dtype=np.float32)
+    # Initialize accumulators on GPU
+    pred_sum = torch.zeros((num_classes, *vol_shape), dtype=torch.float32, device=dev)
+    weight_sum = torch.zeros(vol_shape, dtype=torch.float32, device=dev)
 
-    # Gaussian blending kernel
+    # Gaussian blending kernel on GPU
     if use_gaussian:
-        gaussian = get_gaussian_weight(patch_size)
+        gaussian = torch.from_numpy(get_gaussian_weight(patch_size)).to(dev)
     else:
-        gaussian = np.ones(patch_size, dtype=np.float32)
+        gaussian = torch.ones(patch_size, dtype=torch.float32, device=dev)
 
     # Generate patch start positions
     starts = []
@@ -100,21 +101,20 @@ def sliding_window_inference(
                         patch = padded
 
                     # To tensor: (1, 1, D, H, W)
-                    x = torch.from_numpy(patch[np.newaxis, np.newaxis]).float().to(device)
+                    x = torch.from_numpy(patch[np.newaxis, np.newaxis]).float().to(dev)
 
                     # Forward pass (take highest-res output)
                     outputs = model(x)
                     logits = outputs[0]  # (1, C, D, H, W)
-                    probs = F.softmax(logits, dim=1).cpu().numpy()[0]  # (C, D, H, W)
+                    probs = F.softmax(logits, dim=1)[0]  # (C, D, H, W) — stays on GPU
 
-                    # Accumulate weighted predictions
-                    for c in range(num_classes):
-                        pred_sum[
-                            c,
-                            d_start : d_start + pD,
-                            h_start : h_start + pH,
-                            w_start : w_start + pW,
-                        ] += probs[c] * gaussian
+                    # Accumulate weighted predictions on GPU
+                    pred_sum[
+                        :,
+                        d_start : d_start + pD,
+                        h_start : h_start + pH,
+                        w_start : w_start + pW,
+                    ] += probs * gaussian
 
                     weight_sum[
                         d_start : d_start + pD,
@@ -122,10 +122,8 @@ def sliding_window_inference(
                         w_start : w_start + pW,
                     ] += gaussian
 
-    # Average and argmax
-    weight_sum = np.maximum(weight_sum, 1e-8)
-    for c in range(num_classes):
-        pred_sum[c] /= weight_sum
-
-    pred_labels = np.argmax(pred_sum, axis=0).astype(np.uint8)
+    # Average, argmax, then move to CPU once at the end
+    weight_sum = weight_sum.clamp(min=1e-8)
+    pred_sum /= weight_sum.unsqueeze(0)
+    pred_labels = pred_sum.argmax(dim=0).byte().cpu().numpy()
     return pred_labels
