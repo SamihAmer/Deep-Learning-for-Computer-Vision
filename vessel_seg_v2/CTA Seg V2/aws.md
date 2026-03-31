@@ -2,9 +2,22 @@
 
 ## 1. Launch Instance
 
-Recommended: **g5.xlarge** (1x A10G 24GB, ~$1/hr) or **p3.2xlarge** (1x V100 16GB).
-Use the **Deep Learning AMI (Ubuntu)** — comes with CUDA, cuDNN, and conda preinstalled.
+**AMI**: Deep Learning Base AMI (Ubuntu 22.04) — `ami-0fed8ea08e4253cad`
+Has CUDA + cuDNN preinstalled, no bloated frameworks.
 
+**Instance type** (pick one):
+
+| Instance | GPU | VRAM | $/hr (on-demand) | $/hr (spot) | Notes |
+|----------|-----|------|-------------------|-------------|-------|
+| **g5.2xlarge** | A10G | 24 GB | ~$1.21 | ~$0.36 | Recommended. 32 GB system RAM for preloading all volumes |
+| g6.xlarge | L4 | 24 GB | ~$0.80 | ~$0.25 | Newer Ada arch, similar perf |
+| g4dn.xlarge | T4 | 16 GB | ~$0.53 | ~$0.16 | Budget option, bs=4 only |
+
+**VRAM estimate** (5-stage 3D U-Net, 23.6M params, patch 128^3, AMP on):
+- bs=4: ~6-8 GB peak (comfortable on 24 GB, tight on 16 GB)
+- bs=8: ~12-14 GB peak (needs 24 GB)
+
+**Other settings**:
 - At least 100 GB EBS storage (dataset ~15 GB + model checkpoints)
 - Open SSH (port 22) in security group
 
@@ -13,9 +26,9 @@ Use the **Deep Learning AMI (Ubuntu)** — comes with CUDA, cuDNN, and conda pre
 ```bash
 ssh -i your-key.pem ubuntu@<instance-ip>
 
-# Create conda env (Deep Learning AMI has conda ready)
-conda create -n vessel python=3.10 -y
-conda activate vessel
+# Create a venv (Base AMI has Python + CUDA, no conda)
+python3 -m venv ~/vessel-env
+source ~/vessel-env/bin/activate
 
 # Install dependencies
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
