@@ -285,8 +285,17 @@ def main():
 
     # Data
     print(f"\nDiscovering cases in {cfg['data_dir']}...")
-    all_cases = discover_cases(cfg["data_dir"], modality=cfg.get("modality", "all"))
-    print(f"Found {len(all_cases)} cases (modality: {cfg.get('modality', 'all')})")
+    modality = cfg.get("modality", "ct")
+    all_cases = discover_cases(cfg["data_dir"], modality=modality)
+    print(f"Found {len(all_cases)} cases (modality filter: {modality})")
+
+    # Sanity check: log modality breakdown of discovered cases
+    ct_count = sum(1 for c in all_cases if "topcow_ct_" in os.path.basename(c["image"]))
+    mr_count = sum(1 for c in all_cases if "topcow_mr_" in os.path.basename(c["image"]))
+    print(f"  CT cases: {ct_count}, MR cases: {mr_count}")
+    if modality == "ct" and mr_count > 0:
+        raise RuntimeError(f"Modality filter is 'ct' but {mr_count} MR cases slipped through — check discover_cases()")
+
     train_cases, val_cases = train_val_split(all_cases, cfg["train_val_split"])
     print(f"Train: {len(train_cases)}, Val: {len(val_cases)}")
 

@@ -217,12 +217,15 @@ class TopCoWPatchDataset(Dataset):
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def discover_cases(data_dir: str, modality: str = "all") -> List[Dict[str, str]]:
+def discover_cases(data_dir: str, modality: str = "ct") -> List[Dict[str, str]]:
     """Find all image/label pairs in the TopCoW directory.
 
     Args:
         data_dir: root of TopCoW dataset (contains imagesTr/ and labelsTr/)
-        modality: "ct", "mr", or "all" -- filter by filename prefix
+        modality: "ct", "mr", or "all" -- filter by filename prefix.
+                  Defaults to "ct" to prevent accidental MRA inclusion
+                  (MRA uses different intensity ranges and cannot be
+                  preprocessed with the CTA HU window).
     """
     image_dir = os.path.join(data_dir, "imagesTr")
     label_dir = os.path.join(data_dir, "labelsTr")

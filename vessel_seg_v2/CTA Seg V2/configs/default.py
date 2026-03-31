@@ -34,7 +34,7 @@ CONFIG = {
 
     # ── Training ──────────────────────────────────────────────────────────
     "epochs": 300,
-    "batch_size": 2,
+    "batch_size": 4,
     "learning_rate": 1e-3,
     "weight_decay": 1e-5,
     "scheduler": "cosine",                     # "cosine" | "poly" | "plateau"

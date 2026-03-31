@@ -63,9 +63,12 @@ def main():
     print(f"Model loaded.\n")
 
     # Discover cases and get the same val split used during training
-    all_cases = discover_cases(cfg["data_dir"], modality=cfg.get("modality", "all"))
+    modality = cfg.get("modality", "ct")
+    all_cases = discover_cases(cfg["data_dir"], modality=modality)
     _, val_cases = train_val_split(all_cases, cfg["train_val_split"])
-    print(f"Evaluating on {len(val_cases)} validation cases (modality: {cfg.get('modality', 'all')})\n")
+    ct_count = sum(1 for c in val_cases if "topcow_ct_" in os.path.basename(c["image"]))
+    mr_count = sum(1 for c in val_cases if "topcow_mr_" in os.path.basename(c["image"]))
+    print(f"Evaluating on {len(val_cases)} validation cases (modality filter: {modality}, CT: {ct_count}, MR: {mr_count})\n")
 
     # Run inference + evaluation
     global_metrics = {"dice": [], "cldice": [], "hd95": [], "betti0_error": []}
