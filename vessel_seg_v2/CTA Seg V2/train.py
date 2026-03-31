@@ -81,23 +81,35 @@ def apply_overrides(cfg: dict, args) -> dict:
 
 
 def build_scheduler(optimizer, cfg: dict, steps_per_epoch: int):
-    """Build learning rate scheduler."""
+    """Build learning rate scheduler with optional linear warmup."""
     total_steps = cfg["epochs"] * steps_per_epoch
+    warmup_steps = cfg.get("warmup_epochs", 0) * steps_per_epoch
 
     if cfg["scheduler"] == "cosine":
-        return torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=total_steps, eta_min=1e-7
+        main_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=total_steps - warmup_steps, eta_min=1e-7
         )
     elif cfg["scheduler"] == "poly":
-        return torch.optim.lr_scheduler.PolynomialLR(
-            optimizer, total_iters=total_steps, power=0.9
+        main_scheduler = torch.optim.lr_scheduler.PolynomialLR(
+            optimizer, total_iters=total_steps - warmup_steps, power=0.9
         )
     elif cfg["scheduler"] == "plateau":
+        # Plateau doesn't support SequentialLR, return as-is
         return torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.5, patience=20
         )
     else:
         raise ValueError(f"Unknown scheduler: {cfg['scheduler']}")
+
+    if warmup_steps > 0:
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_steps
+        )
+        return torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup_scheduler, main_scheduler], milestones=[warmup_steps]
+        )
+
+    return main_scheduler
 
 
 # ─── Training ────────────────────────────────────────────────────────────────
