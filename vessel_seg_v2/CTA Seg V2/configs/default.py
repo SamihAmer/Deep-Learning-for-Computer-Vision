@@ -40,7 +40,7 @@ CONFIG = {
     "scheduler": "cosine",                     # "cosine" | "poly" | "plateau"
     "warmup_epochs": 10,
     "use_amp": True,                           # mixed precision
-    "val_interval": 5,                           # validate every N epochs
+    "val_interval": 25,                          # validate every N epochs
     "early_stopping_patience": 5,                # stop after N val cycles without improvement (0=disabled)
 
     # ── Augmentation ──────────────────────────────────────────────────────
