@@ -465,24 +465,26 @@ def main():
             )
         print(line)
 
-        # Save log and resumable checkpoint at validation epochs
+        # Save resumable checkpoint every epoch (cheap — just weights + state)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "scaler_state_dict": scaler.state_dict(),
+                "best_dice": best_dice,
+                "patience_counter": patience_counter,
+                "history": history,
+                "config": cfg,
+            },
+            os.path.join(run_dir, "latest_checkpoint.pth"),
+        )
+
+        # Save log at validation epochs
         if epoch % val_interval == 0:
             with open(log_path, "w") as f:
                 json.dump(history, f, indent=2)
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "scaler_state_dict": scaler.state_dict(),
-                    "best_dice": best_dice,
-                    "patience_counter": patience_counter,
-                    "history": history,
-                    "config": cfg,
-                },
-                os.path.join(run_dir, "latest_checkpoint.pth"),
-            )
 
         # Early stopping check
         early_stopping_patience = cfg.get("early_stopping_patience", 0)

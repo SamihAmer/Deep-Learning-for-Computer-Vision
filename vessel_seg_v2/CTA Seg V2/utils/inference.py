@@ -42,6 +42,7 @@ def sliding_window_inference(
     device: str = "cuda",
     num_classes: int = 2,
     use_gaussian: bool = True,
+    batch_size: int = 8,
 ) -> np.ndarray:
     """
     Run inference on a full 3D volume using overlapping sliding windows.
@@ -54,6 +55,7 @@ def sliding_window_inference(
         device: "cuda" or "cpu"
         num_classes: number of output channels
         use_gaussian: blend with Gaussian weighting to reduce seam artifacts
+        batch_size: number of patches to process in parallel per forward pass
 
     Returns:
         pred_labels: (D, H, W) integer prediction map
@@ -74,7 +76,7 @@ def sliding_window_inference(
     else:
         gaussian = torch.ones(patch_size, dtype=torch.float32, device=dev)
 
-    # Generate patch start positions
+    # Generate all patch start positions upfront
     starts = []
     for dim_size, p_size, s in zip(vol_shape, patch_size, step):
         positions = list(range(0, dim_size - p_size + 1, s))
@@ -83,44 +85,51 @@ def sliding_window_inference(
             positions.append(dim_size - p_size)
         starts.append(positions)
 
+    # Collect all (d, h, w) start coords
+    all_coords = [
+        (d, h, w)
+        for d in starts[0]
+        for h in starts[1]
+        for w in starts[2]
+    ]
+
     with torch.no_grad():
-        for d_start in starts[0]:
-            for h_start in starts[1]:
-                for w_start in starts[2]:
-                    # Extract patch
-                    patch = volume[
-                        d_start : d_start + pD,
-                        h_start : h_start + pH,
-                        w_start : w_start + pW,
-                    ]
+        for i in range(0, len(all_coords), batch_size):
+            batch_coords = all_coords[i : i + batch_size]
+            patches = []
+            for d_start, h_start, w_start in batch_coords:
+                patch = volume[
+                    d_start : d_start + pD,
+                    h_start : h_start + pH,
+                    w_start : w_start + pW,
+                ]
+                if patch.shape != patch_size:
+                    padded = np.zeros(patch_size, dtype=np.float32)
+                    padded[: patch.shape[0], : patch.shape[1], : patch.shape[2]] = patch
+                    patch = padded
+                patches.append(patch)
 
-                    # Pad if patch is smaller than expected (shouldn't happen with above logic)
-                    if patch.shape != patch_size:
-                        padded = np.zeros(patch_size, dtype=np.float32)
-                        padded[: patch.shape[0], : patch.shape[1], : patch.shape[2]] = patch
-                        patch = padded
+            # Stack into (B, 1, D, H, W) and send to GPU once per batch
+            x = torch.from_numpy(np.stack(patches)[:, np.newaxis]).float().to(dev)
 
-                    # To tensor: (1, 1, D, H, W)
-                    x = torch.from_numpy(patch[np.newaxis, np.newaxis]).float().to(dev)
+            outputs = model(x)
+            logits = outputs[0]  # (B, C, D, H, W)
+            probs = F.softmax(logits, dim=1)  # stays on GPU
 
-                    # Forward pass (take highest-res output)
-                    outputs = model(x)
-                    logits = outputs[0]  # (1, C, D, H, W)
-                    probs = F.softmax(logits, dim=1)[0]  # (C, D, H, W) — stays on GPU
+            # Accumulate each patch in the batch
+            for j, (d_start, h_start, w_start) in enumerate(batch_coords):
+                pred_sum[
+                    :,
+                    d_start : d_start + pD,
+                    h_start : h_start + pH,
+                    w_start : w_start + pW,
+                ] += probs[j] * gaussian
 
-                    # Accumulate weighted predictions on GPU
-                    pred_sum[
-                        :,
-                        d_start : d_start + pD,
-                        h_start : h_start + pH,
-                        w_start : w_start + pW,
-                    ] += probs * gaussian
-
-                    weight_sum[
-                        d_start : d_start + pD,
-                        h_start : h_start + pH,
-                        w_start : w_start + pW,
-                    ] += gaussian
+                weight_sum[
+                    d_start : d_start + pD,
+                    h_start : h_start + pH,
+                    w_start : w_start + pW,
+                ] += gaussian
 
     # Average, argmax, then move to CPU once at the end
     weight_sum = weight_sum.clamp(min=1e-8)
