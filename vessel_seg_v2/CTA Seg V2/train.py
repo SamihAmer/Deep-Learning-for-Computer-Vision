@@ -1,10 +1,23 @@
 """
 train.py -- Main training loop for cerebral vessel segmentation.
 
+Supports single-GPU and multi-GPU (DDP) training transparently.
+
 Usage:
+    # Single GPU
     python train.py --data_dir /path/to/topcow2024
-    python train.py --data_dir /path/to/topcow2024 --loss dice_ce_cldice
-    python train.py --data_dir /path/to/topcow2024 --loss dice_ce_skeleton --epochs 300
+
+    # Multi-GPU (auto-detected via torchrun)
+    torchrun --nproc_per_node=4 train.py --data_dir /path/to/topcow2024
+
+    # Examples
+    torchrun --nproc_per_node=4 train.py --data_dir /data/topcow2024 --loss dice_ce_cldice
+    python train.py --data_dir /data/topcow2024 --resume runs/<run>/latest_checkpoint.pth
+
+    # Fine-tune existing model on TopBrain patients only
+    python train.py --data_dir /data/topcow2024 --finetune runs/<run>/best_model.pth \
+        --include_patients 001,002,003,004,005,006,007,008,010,011,012,013,014,015,016,017,018,020,021,022,023,024,025,026,027 \
+        --lr 1e-4 --epochs 100 --patches_per_volume 16 --foreground_ratio 0.5
 """
 
 import os
@@ -17,7 +30,10 @@ from datetime import datetime
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from torch.cuda.amp import GradScaler
 
 # ── Project imports ───────────────────────────────────────────────────────────
@@ -27,6 +43,35 @@ from models.unet3d import UNet3D
 from losses.losses import build_loss
 from utils.metrics import evaluate_volume
 from utils.inference import sliding_window_inference
+
+
+# ── DDP helpers ──────────────────────────────────────────────────────────────
+
+def setup_ddp():
+    """Initialize DDP if launched via torchrun. Returns (local_rank, world_size)."""
+    if "LOCAL_RANK" not in os.environ:
+        return 0, 1  # single-GPU fallback
+
+    local_rank = int(os.environ["LOCAL_RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    dist.init_process_group(backend="nccl")
+    torch.cuda.set_device(local_rank)
+    return local_rank, world_size
+
+
+def cleanup_ddp():
+    if dist.is_initialized():
+        dist.destroy_process_group()
+
+
+def is_main():
+    """True on rank 0 or single-GPU."""
+    return not dist.is_initialized() or dist.get_rank() == 0
+
+
+def unwrap(model):
+    """Get raw model from DDP wrapper."""
+    return model.module if isinstance(model, DDP) else model
 
 
 def parse_args():
@@ -42,6 +87,14 @@ def parse_args():
     parser.add_argument("--no_amp", action="store_true")
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pth to resume training from")
+    parser.add_argument("--finetune", type=str, default=None,
+                        help="Path to checkpoint .pth to fine-tune from (loads model weights only, fresh optimizer)")
+    parser.add_argument("--include_patients", type=str, default=None,
+                        help="Comma-separated patient IDs to include (e.g. 001,002,010). Others excluded from training.")
+    parser.add_argument("--patches_per_volume", type=int, default=None,
+                        help="Override patches sampled per volume per epoch")
+    parser.add_argument("--foreground_ratio", type=float, default=None,
+                        help="Override fraction of patches centered on foreground voxels (0.0-1.0)")
     parser.add_argument("--modality", type=str, default=None, choices=["ct", "mr", "all"],
                         help="Filter dataset by modality (default from config: ct)")
     parser.add_argument("--val_interval", type=int, default=None,
@@ -71,6 +124,10 @@ def apply_overrides(cfg: dict, args) -> dict:
         cfg["base_filters"] = args.base_filters
     if args.no_amp:
         cfg["use_amp"] = False
+    if args.patches_per_volume:
+        cfg["patches_per_volume"] = args.patches_per_volume
+    if args.foreground_ratio is not None:
+        cfg["foreground_ratio"] = args.foreground_ratio
     if args.modality:
         cfg["modality"] = args.modality
     if args.val_interval:
@@ -236,17 +293,39 @@ def validate(
     criterion: nn.Module,
     cfg: dict,
     device: torch.device,
+    rank: int = 0,
+    world_size: int = 1,
 ) -> dict:
     """
     Run full-volume inference on validation set and compute metrics.
-    This is slower than patch-based validation but gives true performance.
+    In DDP mode, cases are split across ranks and metrics are gathered.
+
+    Pipelines GPU inference with CPU metric computation: while metrics
+    run on volume N, volume N+1 is already being inferred on the GPU.
     """
     from data.dataset import load_nifti, preprocess_ct, binarize_labels
+    from concurrent.futures import ThreadPoolExecutor
 
-    model.eval()
+    raw_model = unwrap(model)
+    raw_model.eval()
+
+    # Each rank validates a subset of cases
+    my_cases = val_cases[rank::world_size]
+
     all_metrics = {"dice": [], "cldice": [], "hd95": [], "betti0_error": []}
 
-    for case in val_cases:
+    # Thread pool for CPU-bound metric computation (runs in background
+    # while GPU processes the next volume)
+    metrics_pool = ThreadPoolExecutor(max_workers=1)
+    pending_future = None
+
+    def _collect(future):
+        """Collect results from a completed metrics future."""
+        metrics = future.result()
+        for k, v in metrics.items():
+            all_metrics[k].append(v)
+
+    for case in my_cases:
         vol, meta = load_nifti(case["image"])
         lbl, _ = load_nifti(case["label"])
         vol = preprocess_ct(vol, tuple(cfg["hu_window"]))
@@ -254,19 +333,45 @@ def validate(
             lbl = binarize_labels(lbl)
 
         pred = sliding_window_inference(
-            vol, model,
+            vol, raw_model,
             patch_size=tuple(cfg["patch_size"]),
             overlap=cfg["sliding_window_overlap"],
             device=str(device),
             num_classes=cfg["num_classes"],
         )
 
-        spacing = meta.get("spacing", (1, 1, 1))
-        metrics = evaluate_volume(pred, lbl.astype(np.uint8), voxel_spacing=spacing)
-        for k, v in metrics.items():
-            all_metrics[k].append(v)
+        # Collect previous volume's metrics if ready
+        if pending_future is not None:
+            _collect(pending_future)
 
-    # Average
+        # Submit this volume's metrics to run on CPU while GPU starts next volume
+        spacing = meta.get("spacing", (1, 1, 1))
+        pending_future = metrics_pool.submit(
+            evaluate_volume, pred, lbl.astype(np.uint8), voxel_spacing=spacing,
+        )
+
+    # Collect the last volume's metrics
+    if pending_future is not None:
+        _collect(pending_future)
+
+    metrics_pool.shutdown(wait=True)
+
+    # Gather metrics across ranks
+    if world_size > 1:
+        gathered = {}
+        for k in all_metrics:
+            local_sum = torch.tensor(
+                [sum(all_metrics[k])], dtype=torch.float64, device=device
+            )
+            local_count = torch.tensor(
+                [len(all_metrics[k])], dtype=torch.float64, device=device
+            )
+            dist.all_reduce(local_sum, op=dist.ReduceOp.SUM)
+            dist.all_reduce(local_count, op=dist.ReduceOp.SUM)
+            gathered[k] = (local_sum / local_count).item()
+        return gathered
+
+    # Single GPU
     return {k: float(np.mean(v)) for k, v in all_metrics.items()}
 
 
@@ -276,46 +381,100 @@ def main():
     args = parse_args()
     cfg = apply_overrides(CONFIG, args)
 
-    # Setup output directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{cfg['loss']}_{timestamp}"
-    run_dir = os.path.join(cfg["output_dir"], run_name)
-    os.makedirs(run_dir, exist_ok=True)
+    # DDP setup (no-op for single GPU)
+    rank, world_size = setup_ddp()
+    device = torch.device(f"cuda:{rank}")
 
-    # Save config
-    with open(os.path.join(run_dir, "config.json"), "w") as f:
-        json.dump(cfg, f, indent=2, default=str)
+    # Scale learning rate linearly with world size
+    if world_size > 1:
+        cfg["learning_rate"] *= world_size
 
-    # Device
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
-    if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(args.gpu)}")
-        print(f"VRAM: {torch.cuda.get_device_properties(args.gpu).total_memory / 1e9:.1f} GB")
+    # Setup output directory (rank 0 only)
+    if is_main():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = f"{cfg['loss']}_{timestamp}"
+        run_dir = os.path.join(cfg["output_dir"], run_name)
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "config.json"), "w") as f:
+            json.dump(cfg, f, indent=2, default=str)
+    else:
+        run_dir = None
+
+    # Broadcast run_dir from rank 0 to all ranks
+    if world_size > 1:
+        if is_main():
+            run_dir_bytes = run_dir.encode("utf-8")
+            size_tensor = torch.tensor([len(run_dir_bytes)], dtype=torch.long, device=device)
+        else:
+            size_tensor = torch.tensor([0], dtype=torch.long, device=device)
+        dist.broadcast(size_tensor, src=0)
+        if is_main():
+            dir_tensor = torch.tensor(
+                list(run_dir_bytes), dtype=torch.uint8, device=device
+            )
+        else:
+            dir_tensor = torch.zeros(size_tensor.item(), dtype=torch.uint8, device=device)
+        dist.broadcast(dir_tensor, src=0)
+        if not is_main():
+            run_dir = bytes(dir_tensor.cpu().tolist()).decode("utf-8")
+
+    # Logging
+    if is_main():
+        print(f"Device: {device} (world_size={world_size})")
+        if torch.cuda.is_available():
+            print(f"GPU: {torch.cuda.get_device_name(rank)}")
+            print(f"VRAM: {torch.cuda.get_device_properties(rank).total_memory / 1e9:.1f} GB")
+            torch.backends.cudnn.benchmark = True
+            print("cuDNN benchmark: enabled")
+    else:
         torch.backends.cudnn.benchmark = True
-        print("cuDNN benchmark: enabled")
 
     # Data
-    print(f"\nDiscovering cases in {cfg['data_dir']}...")
+    if is_main():
+        print(f"\nDiscovering cases in {cfg['data_dir']}...")
     modality = cfg.get("modality", "ct")
     all_cases = discover_cases(cfg["data_dir"], modality=modality)
-    print(f"Found {len(all_cases)} cases (modality filter: {modality})")
+    if is_main():
+        print(f"Found {len(all_cases)} cases (modality filter: {modality})")
 
     # Sanity check: log modality breakdown of discovered cases
     ct_count = sum(1 for c in all_cases if "topcow_ct_" in os.path.basename(c["image"]))
     mr_count = sum(1 for c in all_cases if "topcow_mr_" in os.path.basename(c["image"]))
-    print(f"  CT cases: {ct_count}, MR cases: {mr_count}")
+    if is_main():
+        print(f"  CT cases: {ct_count}, MR cases: {mr_count}")
     if modality == "ct" and mr_count > 0:
         raise RuntimeError(f"Modality filter is 'ct' but {mr_count} MR cases slipped through — check discover_cases()")
 
     train_cases, val_cases = train_val_split(all_cases, cfg["train_val_split"])
-    print(f"Train: {len(train_cases)}, Val: {len(val_cases)}")
+    if is_main():
+        print(f"Train: {len(train_cases)}, Val: {len(val_cases)}")
+
+    # Filter to specific patient IDs if requested (e.g. TopBrain-only fine-tuning)
+    if args.include_patients:
+        patient_ids = set(args.include_patients.split(","))
+        def _has_patient_id(case, ids):
+            basename = os.path.basename(case["image"])
+            for pid in ids:
+                if f"_{pid}_" in basename:
+                    return True
+            return False
+
+        train_before = len(train_cases)
+        train_cases = [c for c in train_cases if _has_patient_id(c, patient_ids)]
+        val_cases = [c for c in val_cases if _has_patient_id(c, patient_ids)]
+        if is_main():
+            print(f"Patient filter: {train_before} -> {len(train_cases)} train, {len(val_cases)} val")
 
     train_dataset = TopCoWPatchDataset(train_cases, cfg, augment=True)
+
+    # DDP: DistributedSampler ensures each rank gets different patches
+    sampler = DistributedSampler(train_dataset, shuffle=True) if world_size > 1 else None
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg["batch_size"],
-        shuffle=True,
+        shuffle=(sampler is None),
+        sampler=sampler,
         num_workers=cfg["num_workers"],
         pin_memory=True,
         drop_last=True,
@@ -330,11 +489,18 @@ def main():
         deep_supervision=cfg["deep_supervision"],
     ).to(device)
 
+    if world_size > 1:
+        model = DDP(model, device_ids=[rank])
+
     n_params = sum(p.numel() for p in model.parameters()) / 1e6
-    print(f"\nModel: 3D U-Net with {n_params:.1f}M parameters")
-    print(f"Loss: {cfg['loss']}")
-    print(f"Patch size: {cfg['patch_size']}")
-    print(f"Deep supervision: {cfg['deep_supervision']}")
+    if is_main():
+        print(f"\nModel: 3D U-Net with {n_params:.1f}M parameters")
+        print(f"Loss: {cfg['loss']}")
+        print(f"Patch size: {cfg['patch_size']}")
+        print(f"Deep supervision: {cfg['deep_supervision']}")
+        if world_size > 1:
+            print(f"DDP: {world_size} GPUs, effective batch size = {cfg['batch_size'] * world_size}")
+            print(f"LR scaled: {cfg['learning_rate']:.1e} (base {cfg['learning_rate'] / world_size:.1e} x {world_size})")
 
     # Loss, optimizer, scheduler
     criterion = build_loss(cfg)
@@ -351,10 +517,22 @@ def main():
     best_dice = 0.0
     patience_counter = 0
     history = []
-    if args.resume:
-        print(f"\nResuming from checkpoint: {args.resume}")
+    if args.finetune:
+        # Fine-tune: load model weights only, fresh optimizer/scheduler
+        if is_main():
+            print(f"\nFine-tuning from checkpoint: {args.finetune}")
+        ckpt = torch.load(args.finetune, map_location=device)
+        unwrap(model).load_state_dict(ckpt["model_state_dict"])
+        pretrain_dice = ckpt.get("best_dice", 0.0)
+        pretrain_epoch = ckpt.get("epoch", "?")
+        if is_main():
+            print(f"Loaded weights from epoch {pretrain_epoch} (pretrain Dice: {pretrain_dice:.4f})")
+            print(f"Starting fresh optimizer at LR={cfg['learning_rate']:.1e}")
+    elif args.resume:
+        if is_main():
+            print(f"\nResuming from checkpoint: {args.resume}")
         ckpt = torch.load(args.resume, map_location=device)
-        model.load_state_dict(ckpt["model_state_dict"])
+        unwrap(model).load_state_dict(ckpt["model_state_dict"])
         optimizer.load_state_dict(ckpt["optimizer_state_dict"])
         if "scheduler_state_dict" in ckpt:
             scheduler.load_state_dict(ckpt["scheduler_state_dict"])
@@ -365,20 +543,26 @@ def main():
         patience_counter = ckpt.get("patience_counter", 0)
         if "history" in ckpt:
             history = ckpt["history"]
-        print(f"Resuming from epoch {start_epoch}, best Dice so far: {best_dice:.4f}")
+        if is_main():
+            print(f"Resuming from epoch {start_epoch}, best Dice so far: {best_dice:.4f}")
 
     # Training loop
     log_path = os.path.join(run_dir, "training_log.json")
 
-    print(f"\n{'='*60}")
-    print(f"Starting training for {cfg['epochs']} epochs (from epoch {start_epoch})")
-    print(f"{'='*60}\n")
+    if is_main():
+        print(f"\n{'='*60}")
+        print(f"Starting training for {cfg['epochs']} epochs (from epoch {start_epoch})")
+        print(f"{'='*60}\n")
 
     epoch_times = []  # for ETA calculation
     training_start = time.time()
 
     for epoch in range(start_epoch, cfg["epochs"] + 1):
         t0 = time.time()
+
+        # DDP: set epoch for sampler to re-shuffle
+        if sampler is not None:
+            sampler.set_epoch(epoch)
 
         # Train
         train_metrics = train_one_epoch(
@@ -389,132 +573,150 @@ def main():
         val_metrics = {}
         val_interval = cfg.get("val_interval", 10)
         if epoch % val_interval == 0 or epoch == cfg["epochs"]:
-            print(f"  Running validation (full-volume inference)...")
-            val_metrics = validate(model, val_cases, criterion, cfg, device)
+            if is_main():
+                print(f"  Running validation (full-volume inference)...")
+            val_metrics = validate(
+                model, val_cases, criterion, cfg, device,
+                rank=rank, world_size=world_size,
+            )
 
-            # Save best model
-            if val_metrics.get("dice", 0) > best_dice:
-                best_dice = val_metrics["dice"]
-                patience_counter = 0
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scheduler_state_dict": scheduler.state_dict(),
-                        "scaler_state_dict": scaler.state_dict(),
-                        "best_dice": best_dice,
-                        "patience_counter": patience_counter,
-                        "history": history,
-                        "config": cfg,
-                    },
-                    os.path.join(run_dir, "best_model.pth"),
+            # Save best model (rank 0 only)
+            if is_main():
+                if val_metrics.get("dice", 0) > best_dice:
+                    best_dice = val_metrics["dice"]
+                    patience_counter = 0
+                    torch.save(
+                        {
+                            "epoch": epoch,
+                            "model_state_dict": unwrap(model).state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "scheduler_state_dict": scheduler.state_dict(),
+                            "scaler_state_dict": scaler.state_dict(),
+                            "best_dice": best_dice,
+                            "patience_counter": patience_counter,
+                            "history": history,
+                            "config": cfg,
+                        },
+                        os.path.join(run_dir, "best_model.pth"),
+                    )
+                    print(f"  New best model saved (Dice: {best_dice:.4f})")
+                else:
+                    patience_counter += 1
+                    early_stopping_patience = cfg.get("early_stopping_patience", 0)
+                    if early_stopping_patience > 0:
+                        print(f"  No improvement ({patience_counter}/{early_stopping_patience})")
+
+            # Broadcast best_dice and patience_counter to all ranks
+            if world_size > 1:
+                state = torch.tensor(
+                    [best_dice, float(patience_counter)], device=device
                 )
-                print(f"  New best model saved (Dice: {best_dice:.4f})")
-            else:
-                patience_counter += 1
-                early_stopping_patience = cfg.get("early_stopping_patience", 0)
-                if early_stopping_patience > 0:
-                    print(f"  No improvement ({patience_counter}/{early_stopping_patience})")
+                dist.broadcast(state, src=0)
+                best_dice = state[0].item()
+                patience_counter = int(state[1].item())
 
         elapsed = time.time() - t0
         lr = optimizer.param_groups[0]["lr"]
 
-        # ETA calculation (based on training-only epochs, excludes validation time)
-        epoch_times.append(elapsed)
-        epochs_remaining = cfg["epochs"] - epoch
-        # Use rolling average of last 10 epochs for more stable ETA
-        recent = epoch_times[-10:]
-        avg_epoch_time = sum(recent) / len(recent)
-        eta_seconds = avg_epoch_time * epochs_remaining
-        eta_h = int(eta_seconds // 3600)
-        eta_m = int((eta_seconds % 3600) // 60)
+        if is_main():
+            # ETA calculation
+            epoch_times.append(elapsed)
+            epochs_remaining = cfg["epochs"] - epoch
+            recent = epoch_times[-10:]
+            avg_epoch_time = sum(recent) / len(recent)
+            eta_seconds = avg_epoch_time * epochs_remaining
+            eta_h = int(eta_seconds // 3600)
+            eta_m = int((eta_seconds % 3600) // 60)
 
-        # Log
-        entry = {
-            "epoch": epoch, "lr": lr, "time": elapsed,
-            **train_metrics, **val_metrics,
-        }
-        history.append(entry)
+            # Log
+            entry = {
+                "epoch": epoch, "lr": lr, "time": elapsed,
+                **train_metrics, **val_metrics,
+            }
+            history.append(entry)
 
-        # Print main line
-        line = (
-            f"Epoch {epoch:3d}/{cfg['epochs']}"
-            f" | Loss: {train_metrics['train_loss']:.4f}"
-            f" | TrDice: {train_metrics['train_dice']:.4f}"
-            f" | LR: {lr:.2e}"
-            f" | {elapsed:.0f}s"
-            f" | ETA: {eta_h}h{eta_m:02d}m"
-        )
-        if train_metrics["nan_batches"] > 0:
-            line += f" | NaN: {train_metrics['nan_batches']}"
-        if val_metrics:
-            line += (
-                f"\n  Val  DSC: {val_metrics['dice']:.4f}"
-                f" | clDice: {val_metrics['cldice']:.4f}"
-                f" | HD95: {val_metrics['hd95']:.1f}"
-                f" | B0err: {val_metrics['betti0_error']:.1f}"
+            # Print main line
+            line = (
+                f"Epoch {epoch:3d}/{cfg['epochs']}"
+                f" | Loss: {train_metrics['train_loss']:.4f}"
+                f" | TrDice: {train_metrics['train_dice']:.4f}"
+                f" | LR: {lr:.2e}"
+                f" | {elapsed:.0f}s"
+                f" | ETA: {eta_h}h{eta_m:02d}m"
             )
-        # Print GPU/timing details at validation epochs
-        if epoch % val_interval == 0 or epoch == start_epoch:
-            line += (
-                f"\n  GPU  VRAM: {train_metrics['peak_vram_gb']:.1f}GB"
-                f" | Fwd: {train_metrics['avg_forward_ms']:.0f}ms"
-                f" | Bwd: {train_metrics['avg_backward_ms']:.0f}ms"
-                f" | GradNorm: {train_metrics['avg_grad_norm']:.2f}"
+            if train_metrics["nan_batches"] > 0:
+                line += f" | NaN: {train_metrics['nan_batches']}"
+            if val_metrics:
+                line += (
+                    f"\n  Val  DSC: {val_metrics['dice']:.4f}"
+                    f" | clDice: {val_metrics['cldice']:.4f}"
+                    f" | HD95: {val_metrics['hd95']:.1f}"
+                    f" | B0err: {val_metrics['betti0_error']:.1f}"
+                )
+            # Print GPU/timing details at validation epochs
+            if epoch % val_interval == 0 or epoch == start_epoch:
+                line += (
+                    f"\n  GPU  VRAM: {train_metrics['peak_vram_gb']:.1f}GB"
+                    f" | Fwd: {train_metrics['avg_forward_ms']:.0f}ms"
+                    f" | Bwd: {train_metrics['avg_backward_ms']:.0f}ms"
+                    f" | GradNorm: {train_metrics['avg_grad_norm']:.2f}"
+                )
+            print(line)
+
+            # Save resumable checkpoint every epoch
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": unwrap(model).state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "scaler_state_dict": scaler.state_dict(),
+                    "best_dice": best_dice,
+                    "patience_counter": patience_counter,
+                    "history": history,
+                    "config": cfg,
+                },
+                os.path.join(run_dir, "latest_checkpoint.pth"),
             )
-        print(line)
 
-        # Save resumable checkpoint every epoch (cheap — just weights + state)
-        torch.save(
-            {
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-                "scaler_state_dict": scaler.state_dict(),
-                "best_dice": best_dice,
-                "patience_counter": patience_counter,
-                "history": history,
-                "config": cfg,
-            },
-            os.path.join(run_dir, "latest_checkpoint.pth"),
-        )
+            # Save log at validation epochs
+            if epoch % val_interval == 0:
+                with open(log_path, "w") as f:
+                    json.dump(history, f, indent=2)
 
-        # Save log at validation epochs
-        if epoch % val_interval == 0:
-            with open(log_path, "w") as f:
-                json.dump(history, f, indent=2)
-
-        # Early stopping check
+        # Early stopping check (all ranks must agree)
         early_stopping_patience = cfg.get("early_stopping_patience", 0)
         if early_stopping_patience > 0 and patience_counter >= early_stopping_patience:
-            print(f"\nEarly stopping: no improvement for {patience_counter} validation cycles.")
+            if is_main():
+                print(f"\nEarly stopping: no improvement for {patience_counter} validation cycles.")
             break
 
-    # Save final model
-    torch.save(
-        {
-            "epoch": cfg["epochs"],
-            "model_state_dict": model.state_dict(),
-            "config": cfg,
-        },
-        os.path.join(run_dir, "final_model.pth"),
-    )
+    # Save final model (rank 0 only)
+    if is_main():
+        torch.save(
+            {
+                "epoch": cfg["epochs"],
+                "model_state_dict": unwrap(model).state_dict(),
+                "config": cfg,
+            },
+            os.path.join(run_dir, "final_model.pth"),
+        )
 
-    # Save final log
-    with open(log_path, "w") as f:
-        json.dump(history, f, indent=2)
+        # Save final log
+        with open(log_path, "w") as f:
+            json.dump(history, f, indent=2)
 
-    total_time = time.time() - training_start
-    total_h = int(total_time // 3600)
-    total_m = int((total_time % 3600) // 60)
+        total_time = time.time() - training_start
+        total_h = int(total_time // 3600)
+        total_m = int((total_time % 3600) // 60)
 
-    print(f"\n{'='*60}")
-    print(f"Training complete in {total_h}h{total_m:02d}m")
-    print(f"Best validation Dice: {best_dice:.4f}")
-    print(f"Outputs saved to: {run_dir}")
-    print(f"{'='*60}")
+        print(f"\n{'='*60}")
+        print(f"Training complete in {total_h}h{total_m:02d}m")
+        print(f"Best validation Dice: {best_dice:.4f}")
+        print(f"Outputs saved to: {run_dir}")
+        print(f"{'='*60}")
+
+    cleanup_ddp()
 
 
 if __name__ == "__main__":

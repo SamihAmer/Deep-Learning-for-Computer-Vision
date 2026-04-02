@@ -15,34 +15,75 @@ from typing import Dict, List, Tuple
 from utils.metrics import compute_dice, compute_cldice, compute_betti0_error
 
 
-# ── TopCoW class mapping ─────────────────────────────────────────────────────
-# These IDs correspond to the integer labels in TopCoW 2024 ground truth.
-# Verify against the dataset README after downloading; IDs may shift between
-# TopCoW 2023 and 2024 versions.
+# ── TopBrain / TopCoW class mapping ──────────────────────────────────────────
+# IDs 1-12 and 15 are shared between TopCoW 2024 and TopBrain 2025.
+# IDs 13-14, 16-40 are TopBrain extensions (distal branches, posterior fossa,
+# small arteries, and venous sinuses).
+# Label IDs match the TopCoW 2024 README and TopBrain ITK-Snap labelmap.
 
 VESSEL_CLASSES = {
+    # ── Circle of Willis (TopCoW 2024, retained in TopBrain) ──
     1:  "BA",           # Basilar artery
-    2:  "R-PCA",        # Right posterior cerebral artery
-    3:  "L-PCA",        # Left posterior cerebral artery
+    2:  "R-PCA",        # Right P1/P2 posterior cerebral artery
+    3:  "L-PCA",        # Left P1/P2 posterior cerebral artery
     4:  "R-ICA",        # Right internal carotid artery
-    5:  "L-ICA",        # Left internal carotid artery
-    6:  "R-MCA",        # Right middle cerebral artery
-    7:  "L-MCA",        # Left middle cerebral artery
-    8:  "R-ACA",        # Right anterior cerebral artery (A1/A2)
-    9:  "L-ACA",        # Left anterior cerebral artery (A1/A2)
-    10: "R-Pcom",       # Right posterior communicating artery
-    11: "L-Pcom",       # Left posterior communicating artery
-    12: "Acom",         # Anterior communicating artery
-    13: "3rd-A2",       # Third A2 segment (variant)
+    5:  "R-MCA",        # Right M1 middle cerebral artery
+    6:  "L-ICA",        # Left internal carotid artery
+    7:  "L-MCA",        # Left M1 middle cerebral artery
+    8:  "R-Pcom",       # Right posterior communicating artery
+    9:  "L-Pcom",       # Left posterior communicating artery
+    10: "Acom",         # Anterior communicating artery
+    11: "R-ACA",        # Right A1/A2 anterior cerebral artery
+    12: "L-ACA",        # Left A1/A2 anterior cerebral artery
+    15: "3rd-A2",       # Third A2 segment (variant)
+    # ── TopBrain extensions: distal cerebral arteries ──
+    13: "R-A3",         # Right A3 anterior cerebral artery
+    14: "L-A3",         # Left A3 anterior cerebral artery
+    16: "3rd-A3",       # Third A3 anterior cerebral artery
+    17: "R-M2",         # Right M2 middle cerebral artery
+    18: "R-M3",         # Right M3 middle cerebral artery
+    19: "L-M2",         # Left M2 middle cerebral artery
+    20: "L-M3",         # Left M3 middle cerebral artery
+    21: "R-P3P4",       # Right P3/P4 posterior cerebral artery
+    22: "L-P3P4",       # Left P3/P4 posterior cerebral artery
+    # ── TopBrain extensions: posterior fossa ──
+    23: "R-VA",         # Right vertebral artery
+    24: "L-VA",         # Left vertebral artery
+    25: "R-SCA",        # Right superior cerebellar artery
+    26: "L-SCA",        # Left superior cerebellar artery
+    27: "R-AICA",       # Right anterior inferior cerebellar artery
+    28: "L-AICA",       # Left anterior inferior cerebellar artery
+    29: "R-PICA",       # Right posterior inferior cerebellar artery
+    30: "L-PICA",       # Left posterior inferior cerebellar artery
+    # ── TopBrain extensions: small arteries ──
+    31: "R-AChA",       # Right anterior choroidal artery
+    32: "L-AChA",       # Left anterior choroidal artery
+    33: "R-OA",         # Right ophthalmic artery
+    34: "L-OA",         # Left ophthalmic artery
+    # ── TopBrain extensions: venous sinuses (CTA only) ──
+    35: "VoG",          # Vein of Galen
+    36: "StS",          # Straight sinus
+    37: "ICVs",         # Internal cerebral veins
+    38: "R-BVR",        # Right basal vein of Rosenthal
+    39: "L-BVR",        # Left basal vein of Rosenthal
+    40: "SSS",          # Superior sagittal sinus
 }
 
-# Clinical grouping: large named arteries vs. small communicating segments
-LARGE_VESSELS = {1, 2, 3, 4, 5, 6, 7, 8, 9}       # BA, PCA, ICA, MCA, ACA
-SMALL_VESSELS = {10, 11, 12, 13}                     # Pcom, Acom, 3rd-A2
+# Clinical grouping
+LARGE_VESSELS = {1, 2, 3, 4, 5, 6, 7, 11, 12}     # BA, PCA, ICA, M1, A1/A2
+SMALL_VESSELS = {8, 9, 10, 15}                       # Pcom, Acom, 3rd-A2
+DISTAL_VESSELS = {13, 14, 16, 17, 18, 19, 20, 21, 22}  # A3, M2, M3, P3/P4
+POSTERIOR_FOSSA = {23, 24, 25, 26, 27, 28, 29, 30}  # VA, SCA, AICA, PICA
+SMALL_ARTERIES = {31, 32, 33, 34}                    # AChA, OA
+VENOUS = {35, 36, 37, 38, 39, 40}                    # Sinuses and veins
 
 GROUP_NAMES = {
-    "large": "Large named arteries (BA, ICA, MCA, PCA, ACA)",
+    "large": "Large CoW arteries (BA, ICA, M1, PCA, ACA)",
     "small": "Communicating arteries (Acom, Pcom, 3rd-A2)",
+    "distal": "Distal branches (A3, M2, M3, P3/P4)",
+    "posterior_fossa": "Posterior fossa (VA, SCA, AICA, PICA)",
+    "small_arteries": "Small arteries (AChA, OA)",
+    "venous": "Venous sinuses (VoG, StS, ICVs, BVR, SSS)",
 }
 
 
@@ -103,15 +144,32 @@ def _dilate_mask(mask: np.ndarray, radius: int = 3) -> np.ndarray:
     return dilated.astype(np.uint8)
 
 
+def _classify_vessel(class_id: int) -> str:
+    """Map a vessel class ID to its clinical group name."""
+    if class_id in LARGE_VESSELS:
+        return "large"
+    elif class_id in SMALL_VESSELS:
+        return "small"
+    elif class_id in DISTAL_VESSELS:
+        return "distal"
+    elif class_id in POSTERIOR_FOSSA:
+        return "posterior_fossa"
+    elif class_id in SMALL_ARTERIES:
+        return "small_arteries"
+    elif class_id in VENOUS:
+        return "venous"
+    return "other"
+
+
 def aggregate_by_group(
     per_class_results: Dict[str, Dict[str, float]]
 ) -> Dict[str, Dict[str, float]]:
     """
-    Aggregate per-class metrics into large vs. small vessel groups.
+    Aggregate per-class metrics into vessel groups.
 
     Averages only over vessel classes that are present (non-NaN).
     """
-    groups = {"large": [], "small": []}
+    groups = {name: [] for name in GROUP_NAMES}
 
     for class_id, name in VESSEL_CLASSES.items():
         if name not in per_class_results:
@@ -120,8 +178,9 @@ def aggregate_by_group(
         if not r["present"]:
             continue
 
-        group = "large" if class_id in LARGE_VESSELS else "small"
-        groups[group].append(r)
+        group = _classify_vessel(class_id)
+        if group in groups:
+            groups[group].append(r)
 
     aggregated = {}
     for group_name, entries in groups.items():
@@ -163,15 +222,20 @@ def evaluate_volume_stratified(
     per_class = evaluate_per_class(pred_binary, gt_multiclass)
     grouped = aggregate_by_group(per_class)
 
-    # Compute the gap between large and small vessel performance
+    # Compute the gap between large and each other vessel group
     delta = {}
-    for metric in ["dice", "cldice"]:
-        large_val = grouped.get("large", {}).get(metric, float("nan"))
-        small_val = grouped.get("small", {}).get(metric, float("nan"))
-        if not (np.isnan(large_val) or np.isnan(small_val)):
-            delta[metric] = float(large_val - small_val)
-        else:
-            delta[metric] = float("nan")
+    large_vals = grouped.get("large", {})
+    for group_name in GROUP_NAMES:
+        if group_name == "large":
+            continue
+        for metric in ["dice", "cldice"]:
+            large_val = large_vals.get(metric, float("nan"))
+            other_val = grouped.get(group_name, {}).get(metric, float("nan"))
+            key = f"{metric}_large_vs_{group_name}"
+            if not (np.isnan(large_val) or np.isnan(other_val)):
+                delta[key] = float(large_val - other_val)
+            else:
+                delta[key] = float("nan")
 
     return {
         "per_class": per_class,
@@ -201,13 +265,19 @@ def format_stratified_results(results: Dict) -> str:
     lines.append("")
     lines.append("  Grouped results:")
     for group, vals in results["grouped"].items():
+        if vals["n_classes"] == 0:
+            continue
         lines.append(
             f"  {GROUP_NAMES.get(group, group)}: "
             f"DSC={vals['dice']:.4f}, clDice={vals['cldice']:.4f} "
             f"(n={vals['n_classes']} classes)"
         )
 
+    lines.append("")
+    lines.append("  Gaps (large vs other groups):")
     delta = results["delta"]
-    lines.append(f"  Gap (large - small): DSC={delta['dice']:.4f}, clDice={delta['cldice']:.4f}")
+    for key, val in delta.items():
+        if not np.isnan(val):
+            lines.append(f"  {key}: {val:.4f}")
 
     return "\n".join(lines)

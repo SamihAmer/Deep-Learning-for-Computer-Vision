@@ -11,6 +11,7 @@ Computes:
 import numpy as np
 from scipy.ndimage import distance_transform_edt, label as nd_label
 from typing import Dict
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from skimage.morphology import skeletonize_3d
@@ -50,8 +51,14 @@ def compute_cldice(pred: np.ndarray, gt: np.ndarray) -> float:
     if pred.sum() == 0 or gt.sum() == 0:
         return 0.0
 
-    skel_pred = skeletonize_3d(pred.astype(np.uint8)).astype(bool)
-    skel_gt = skeletonize_3d(gt.astype(np.uint8)).astype(bool)
+    # Parallelize the two independent skeletonizations
+    pred_u8 = pred.astype(np.uint8)
+    gt_u8 = gt.astype(np.uint8)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_pred = pool.submit(skeletonize_3d, pred_u8)
+        fut_gt = pool.submit(skeletonize_3d, gt_u8)
+        skel_pred = fut_pred.result().astype(bool)
+        skel_gt = fut_gt.result().astype(bool)
 
     if skel_pred.sum() == 0 or skel_gt.sum() == 0:
         return 0.0
@@ -78,15 +85,25 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, voxel_spacing: tuple = (1, 1,
     # Surface voxels (boundary detection via erosion)
     from scipy.ndimage import binary_erosion
 
-    pred_border = pred.astype(bool) & ~binary_erosion(pred.astype(bool))
-    gt_border = gt.astype(bool) & ~binary_erosion(gt.astype(bool))
+    pred_bool = pred.astype(bool)
+    gt_bool = gt.astype(bool)
 
-    if pred_border.sum() == 0 or gt_border.sum() == 0:
+    # Parallelize the two independent erosion + distance transform operations
+    def _surface_dt(mask, spacing):
+        border = mask & ~binary_erosion(mask)
+        if border.sum() == 0:
+            return border, None
+        dt = distance_transform_edt(~border, sampling=spacing)
+        return border, dt
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_pred = pool.submit(_surface_dt, pred_bool, voxel_spacing)
+        fut_gt = pool.submit(_surface_dt, gt_bool, voxel_spacing)
+        pred_border, dt_pred = fut_pred.result()
+        gt_border, dt_gt = fut_gt.result()
+
+    if dt_pred is None or dt_gt is None:
         return float("inf")
-
-    # Distance transforms
-    dt_pred = distance_transform_edt(~pred_border, sampling=voxel_spacing)
-    dt_gt = distance_transform_edt(~gt_border, sampling=voxel_spacing)
 
     # Surface-to-surface distances
     dist_pred_to_gt = dt_gt[pred_border]
@@ -115,6 +132,7 @@ def evaluate_volume(
 ) -> Dict[str, float]:
     """
     Run all metrics on a single predicted/ground-truth volume pair.
+    Metrics are computed in parallel where possible.
 
     Args:
         pred: binary prediction mask (D, H, W)
@@ -127,9 +145,16 @@ def evaluate_volume(
     pred_bin = (pred > 0).astype(np.uint8)
     gt_bin = (gt > 0).astype(np.uint8)
 
+    # Run all four metrics concurrently (they're independent and CPU-bound)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        fut_dice = pool.submit(compute_dice, pred_bin, gt_bin)
+        fut_cldice = pool.submit(compute_cldice, pred_bin, gt_bin)
+        fut_hd95 = pool.submit(compute_hd95, pred_bin, gt_bin, voxel_spacing)
+        fut_betti = pool.submit(compute_betti0_error, pred_bin, gt_bin)
+
     return {
-        "dice": compute_dice(pred_bin, gt_bin),
-        "cldice": compute_cldice(pred_bin, gt_bin),
-        "hd95": compute_hd95(pred_bin, gt_bin, voxel_spacing),
-        "betti0_error": compute_betti0_error(pred_bin, gt_bin),
+        "dice": fut_dice.result(),
+        "cldice": fut_cldice.result(),
+        "hd95": fut_hd95.result(),
+        "betti0_error": fut_betti.result(),
     }

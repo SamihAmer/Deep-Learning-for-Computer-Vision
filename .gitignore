@@ -2,8 +2,10 @@
 # MNIST dataset files
 **/archive/
 
-# TopCoW dataset
+# Datasets (large binary files)
 vessel_seg_v2/CTA Seg V2/data/TopCoW2024_Data_Release/
+vessel_seg_v2/CTA Seg V2/data/*.zip
+vessel_seg_v2/CTA Seg V2/data/TopBrain_README/
 
 # Python caches
 __pycache__/
@@ -12,4 +14,9 @@ __pycache__/
 # CTA Seg V2 generated artifacts
 vessel_seg_v2/CTA Seg V2/runs/
 vessel_seg_v2/CTA Seg V2/*.onnx
+
+# Training run outputs (model checkpoints, logs)
+dice_ce_*/
+*.pth
+*.onnx
 

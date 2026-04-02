@@ -11,24 +11,26 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple
+from functools import lru_cache
 
 
+@lru_cache(maxsize=4)
 def get_gaussian_weight(patch_size: Tuple[int, int, int], sigma_scale: float = 0.125) -> np.ndarray:
     """
     Create a 3D Gaussian importance map for blending overlapping patches.
     Center voxels get higher weight, edges taper off.
+
+    Cached so it's computed once and reused across all volumes.
     """
-    weight = np.ones(patch_size, dtype=np.float32)
-    center = np.array(patch_size) / 2.0
-    sigmas = np.array(patch_size) * sigma_scale
+    # Vectorized: build 1D Gaussians per axis, then outer product
+    axes = []
+    for size in patch_size:
+        center = size / 2.0
+        sigma = size * sigma_scale
+        coords = np.arange(size, dtype=np.float32)
+        axes.append(np.exp(-0.5 * ((coords - center) / sigma) ** 2))
 
-    for d in range(patch_size[0]):
-        for h in range(patch_size[1]):
-            for w in range(patch_size[2]):
-                dist = ((np.array([d, h, w]) - center) / sigmas) ** 2
-                weight[d, h, w] = np.exp(-0.5 * dist.sum())
-
-    # Normalize so max = 1
+    weight = axes[0][:, None, None] * axes[1][None, :, None] * axes[2][None, None, :]
     weight = weight / weight.max()
     weight = np.clip(weight, 1e-4, 1.0)
     return weight
@@ -42,7 +44,7 @@ def sliding_window_inference(
     device: str = "cuda",
     num_classes: int = 2,
     use_gaussian: bool = True,
-    batch_size: int = 8,
+    batch_size: int = 16,
 ) -> np.ndarray:
     """
     Run inference on a full 3D volume using overlapping sliding windows.
@@ -70,7 +72,7 @@ def sliding_window_inference(
     pred_sum = torch.zeros((num_classes, *vol_shape), dtype=torch.float32, device=dev)
     weight_sum = torch.zeros(vol_shape, dtype=torch.float32, device=dev)
 
-    # Gaussian blending kernel on GPU
+    # Gaussian blending kernel on GPU (cached across calls)
     if use_gaussian:
         gaussian = torch.from_numpy(get_gaussian_weight(patch_size)).to(dev)
     else:
@@ -93,28 +95,28 @@ def sliding_window_inference(
         for w in starts[2]
     ]
 
-    with torch.no_grad():
+    # Pre-extract all patches into a contiguous array to minimize per-batch overhead
+    all_patches = np.empty((len(all_coords), 1, pD, pH, pW), dtype=np.float32)
+    for i, (d_start, h_start, w_start) in enumerate(all_coords):
+        patch = volume[
+            d_start : d_start + pD,
+            h_start : h_start + pH,
+            w_start : w_start + pW,
+        ]
+        if patch.shape != patch_size:
+            padded = np.zeros(patch_size, dtype=np.float32)
+            padded[: patch.shape[0], : patch.shape[1], : patch.shape[2]] = patch
+            patch = padded
+        all_patches[i, 0] = patch
+
+    with torch.no_grad(), torch.amp.autocast("cuda"):
         for i in range(0, len(all_coords), batch_size):
             batch_coords = all_coords[i : i + batch_size]
-            patches = []
-            for d_start, h_start, w_start in batch_coords:
-                patch = volume[
-                    d_start : d_start + pD,
-                    h_start : h_start + pH,
-                    w_start : w_start + pW,
-                ]
-                if patch.shape != patch_size:
-                    padded = np.zeros(patch_size, dtype=np.float32)
-                    padded[: patch.shape[0], : patch.shape[1], : patch.shape[2]] = patch
-                    patch = padded
-                patches.append(patch)
-
-            # Stack into (B, 1, D, H, W) and send to GPU once per batch
-            x = torch.from_numpy(np.stack(patches)[:, np.newaxis]).float().to(dev)
+            x = torch.from_numpy(all_patches[i : i + batch_size]).to(dev, non_blocking=True)
 
             outputs = model(x)
-            logits = outputs[0]  # (B, C, D, H, W)
-            probs = F.softmax(logits, dim=1)  # stays on GPU
+            logits = outputs[0] if isinstance(outputs, (list, tuple)) else outputs
+            probs = F.softmax(logits, dim=1)
 
             # Accumulate each patch in the batch
             for j, (d_start, h_start, w_start) in enumerate(batch_coords):

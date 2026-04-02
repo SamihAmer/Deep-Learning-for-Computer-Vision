@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs wc:*)"
+      "Bash(xargs wc:*)",
+      "WebSearch",
+      "WebFetch(domain:instances.vantage.sh)",
+      "WebFetch(domain:aws.amazon.com)",
+      "WebFetch(domain:www.medrxiv.org)",
+      "WebFetch(domain:towardsdatascience.com)"
     ]
   }
 }
