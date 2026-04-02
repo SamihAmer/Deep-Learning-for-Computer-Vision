@@ -14,10 +14,9 @@ Usage:
     torchrun --nproc_per_node=4 train.py --data_dir /data/topcow2024 --loss dice_ce_cldice
     python train.py --data_dir /data/topcow2024 --resume runs/<run>/latest_checkpoint.pth
 
-    # Fine-tune existing model on TopBrain patients only
-    python train.py --data_dir /data/topcow2024 --finetune runs/<run>/best_model.pth \
-        --include_patients 001,002,003,004,005,006,007,008,010,011,012,013,014,015,016,017,018,020,021,022,023,024,025,026,027 \
-        --lr 1e-4 --epochs 100 --patches_per_volume 16 --foreground_ratio 0.5
+    # Fine-tune on TopBrain (40-class labels, separate dataset)
+    torchrun --nproc_per_node=8 train.py --data_dir /data/topcow2024 \
+        --finetune runs/<run>/best_model.pth --topbrain_dir /data/topbrain
 """
 
 import os
@@ -38,7 +37,7 @@ from torch.cuda.amp import GradScaler
 
 # ── Project imports ───────────────────────────────────────────────────────────
 from configs.default import CONFIG
-from data.dataset import discover_cases, train_val_split, TopCoWPatchDataset
+from data.dataset import discover_cases, discover_topbrain_cases, train_val_split, TopCoWPatchDataset
 from models.unet3d import UNet3D
 from losses.losses import build_loss
 from utils.metrics import evaluate_volume
@@ -89,6 +88,8 @@ def parse_args():
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pth to resume training from")
     parser.add_argument("--finetune", type=str, default=None,
                         help="Path to checkpoint .pth to fine-tune from (loads model weights only, fresh optimizer)")
+    parser.add_argument("--topbrain_dir", type=str, default=None,
+                        help="Path to TopBrain dataset root (uses 40-class labels instead of TopCoW 13-class)")
     parser.add_argument("--include_patients", type=str, default=None,
                         help="Comma-separated patient IDs to include (e.g. 001,002,010). Others excluded from training.")
     parser.add_argument("--patches_per_volume", type=int, default=None,
@@ -211,11 +212,13 @@ def train_one_epoch(
             torch.cuda.synchronize()
             total_forward_ms += (time.time() - t_fwd) * 1000
 
-            # Skip batch if loss is NaN/inf to prevent poisoning weights
-            if not torch.isfinite(loss):
-                optimizer.zero_grad(set_to_none=True)
+            # On NaN/inf loss, replace with zero but keep the computation graph
+            # so backward() still runs and DDP gradient all-reduce stays in sync.
+            # Skipping backward with `continue` causes rank desync and NCCL deadlocks.
+            is_nan = not torch.isfinite(loss)
+            if is_nan:
                 nan_count += 1
-                continue
+                loss = torch.where(torch.isfinite(loss), loss, torch.zeros_like(loss))
 
             # Backward pass
             t_bwd = time.time()
@@ -235,11 +238,10 @@ def train_one_epoch(
             torch.cuda.synchronize()
             total_forward_ms += (time.time() - t_fwd) * 1000
 
-            # Skip batch if loss is NaN/inf
-            if not torch.isfinite(loss):
-                optimizer.zero_grad(set_to_none=True)
+            is_nan = not torch.isfinite(loss)
+            if is_nan:
                 nan_count += 1
-                continue
+                loss = torch.where(torch.isfinite(loss), loss, torch.zeros_like(loss))
 
             # Backward pass
             t_bwd = time.time()
@@ -290,18 +292,22 @@ def train_one_epoch(
 def validate(
     model: nn.Module,
     val_cases: list,
-    criterion: nn.Module,
     cfg: dict,
     device: torch.device,
-    rank: int = 0,
-    world_size: int = 1,
+    quick: bool = True,
 ) -> dict:
     """
     Run full-volume inference on validation set and compute metrics.
-    In DDP mode, cases are split across ranks and metrics are gathered.
+    Runs on rank 0 only — other ranks wait at a barrier in the caller.
 
     Pipelines GPU inference with CPU metric computation: while metrics
     run on volume N, volume N+1 is already being inferred on the GPU.
+
+    Args:
+        quick: if True (default), only compute Dice during training.
+               Skips clDice (skeletonize_3d ~30-60s/vol) and HD95
+               (distance_transform_edt ~10-20s/vol). Full metrics
+               are computed at the final epoch or via evaluate.py.
     """
     from data.dataset import load_nifti, preprocess_ct, binarize_labels
     from concurrent.futures import ThreadPoolExecutor
@@ -309,10 +315,9 @@ def validate(
     raw_model = unwrap(model)
     raw_model.eval()
 
-    # Each rank validates a subset of cases
-    my_cases = val_cases[rank::world_size]
-
-    all_metrics = {"dice": [], "cldice": [], "hd95": [], "betti0_error": []}
+    all_metrics = {"dice": []}
+    if not quick:
+        all_metrics.update({"cldice": [], "hd95": [], "betti0_error": []})
 
     # Thread pool for CPU-bound metric computation (runs in background
     # while GPU processes the next volume)
@@ -323,9 +328,10 @@ def validate(
         """Collect results from a completed metrics future."""
         metrics = future.result()
         for k, v in metrics.items():
-            all_metrics[k].append(v)
+            if k in all_metrics:
+                all_metrics[k].append(v)
 
-    for case in my_cases:
+    for case in val_cases:
         vol, meta = load_nifti(case["image"])
         lbl, _ = load_nifti(case["label"])
         vol = preprocess_ct(vol, tuple(cfg["hu_window"]))
@@ -347,7 +353,8 @@ def validate(
         # Submit this volume's metrics to run on CPU while GPU starts next volume
         spacing = meta.get("spacing", (1, 1, 1))
         pending_future = metrics_pool.submit(
-            evaluate_volume, pred, lbl.astype(np.uint8), voxel_spacing=spacing,
+            evaluate_volume, pred, lbl.astype(np.uint8),
+            voxel_spacing=spacing, quick=quick,
         )
 
     # Collect the last volume's metrics
@@ -356,22 +363,6 @@ def validate(
 
     metrics_pool.shutdown(wait=True)
 
-    # Gather metrics across ranks
-    if world_size > 1:
-        gathered = {}
-        for k in all_metrics:
-            local_sum = torch.tensor(
-                [sum(all_metrics[k])], dtype=torch.float64, device=device
-            )
-            local_count = torch.tensor(
-                [len(all_metrics[k])], dtype=torch.float64, device=device
-            )
-            dist.all_reduce(local_sum, op=dist.ReduceOp.SUM)
-            dist.all_reduce(local_count, op=dist.ReduceOp.SUM)
-            gathered[k] = (local_sum / local_count).item()
-        return gathered
-
-    # Single GPU
     return {k: float(np.mean(v)) for k, v in all_metrics.items()}
 
 
@@ -381,18 +372,28 @@ def main():
     args = parse_args()
     cfg = apply_overrides(CONFIG, args)
 
+    # Fine-tuning mode: apply defaults before LR scaling
+    is_finetune = args.finetune is not None
+    if is_finetune:
+        if not args.epochs:
+            cfg["epochs"] = cfg.get("finetune_epochs", 150)
+        if not args.lr:
+            cfg["learning_rate"] = cfg.get("finetune_lr", 1e-4)
+        cfg["warmup_epochs"] = cfg.get("finetune_warmup_epochs", 5)
+
     # DDP setup (no-op for single GPU)
     rank, world_size = setup_ddp()
     device = torch.device(f"cuda:{rank}")
 
-    # Scale learning rate linearly with world size
-    if world_size > 1:
-        cfg["learning_rate"] *= world_size
+    # Note: LR is NOT scaled with world size. The effective batch is larger
+    # (batch_size * world_size) but the base LR (1e-3) works well as-is.
+    # Linear/sqrt scaling caused instability with topology-aware losses.
 
     # Setup output directory (rank 0 only)
     if is_main():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = f"{cfg['loss']}_{timestamp}"
+        prefix = "finetune_topbrain_" if args.topbrain_dir else ""
+        run_name = f"{prefix}{cfg['loss']}_{timestamp}"
         run_dir = os.path.join(cfg["output_dir"], run_name)
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "config.json"), "w") as f:
@@ -429,13 +430,21 @@ def main():
     else:
         torch.backends.cudnn.benchmark = True
 
-    # Data
-    if is_main():
-        print(f"\nDiscovering cases in {cfg['data_dir']}...")
+    # Data — use TopBrain if --topbrain_dir provided, else TopCoW
     modality = cfg.get("modality", "ct")
-    all_cases = discover_cases(cfg["data_dir"], modality=modality)
-    if is_main():
-        print(f"Found {len(all_cases)} cases (modality filter: {modality})")
+    if args.topbrain_dir:
+        if is_main():
+            print(f"\nDiscovering TopBrain cases in {args.topbrain_dir}...")
+        all_cases = discover_topbrain_cases(args.topbrain_dir, modality=modality)
+        if is_main():
+            print(f"Found {len(all_cases)} TopBrain cases (modality: {modality})")
+            print(f"  TopBrain labels: 40 vessel classes (vs 13 in TopCoW)")
+    else:
+        if is_main():
+            print(f"\nDiscovering cases in {cfg['data_dir']}...")
+        all_cases = discover_cases(cfg["data_dir"], modality=modality)
+        if is_main():
+            print(f"Found {len(all_cases)} cases (modality filter: {modality})")
 
     # Sanity check: log modality breakdown of discovered cases
     ct_count = sum(1 for c in all_cases if "topcow_ct_" in os.path.basename(c["image"]))
@@ -573,15 +582,20 @@ def main():
         val_metrics = {}
         val_interval = cfg.get("val_interval", 10)
         if epoch % val_interval == 0 or epoch == cfg["epochs"]:
-            if is_main():
-                print(f"  Running validation (full-volume inference)...")
-            val_metrics = validate(
-                model, val_cases, criterion, cfg, device,
-                rank=rank, world_size=world_size,
-            )
+            is_final = (epoch == cfg["epochs"])
 
-            # Save best model (rank 0 only)
+            # Validate on rank 0 only — other ranks wait at the barrier below.
+            # Distributing val across ranks causes NCCL timeouts when some
+            # ranks have 0 cases and finish instantly while others are still
+            # doing sliding window inference.
             if is_main():
+                mode = "full metrics" if is_final else "quick (Dice only)"
+                print(f"  Running validation ({mode})...")
+                val_metrics = validate(
+                    model, val_cases, cfg, device,
+                    quick=not is_final,
+                )
+
                 if val_metrics.get("dice", 0) > best_dice:
                     best_dice = val_metrics["dice"]
                     patience_counter = 0
@@ -606,8 +620,9 @@ def main():
                     if early_stopping_patience > 0:
                         print(f"  No improvement ({patience_counter}/{early_stopping_patience})")
 
-            # Broadcast best_dice and patience_counter to all ranks
+            # Sync all ranks — other ranks wait here while rank 0 validates
             if world_size > 1:
+                # Broadcast best_dice and patience_counter from rank 0
                 state = torch.tensor(
                     [best_dice, float(patience_counter)], device=device
                 )
@@ -647,12 +662,13 @@ def main():
             if train_metrics["nan_batches"] > 0:
                 line += f" | NaN: {train_metrics['nan_batches']}"
             if val_metrics:
-                line += (
-                    f"\n  Val  DSC: {val_metrics['dice']:.4f}"
-                    f" | clDice: {val_metrics['cldice']:.4f}"
-                    f" | HD95: {val_metrics['hd95']:.1f}"
-                    f" | B0err: {val_metrics['betti0_error']:.1f}"
-                )
+                line += f"\n  Val  DSC: {val_metrics['dice']:.4f}"
+                if "cldice" in val_metrics:
+                    line += (
+                        f" | clDice: {val_metrics['cldice']:.4f}"
+                        f" | HD95: {val_metrics['hd95']:.1f}"
+                        f" | B0err: {val_metrics['betti0_error']:.1f}"
+                    )
             # Print GPU/timing details at validation epochs
             if epoch % val_interval == 0 or epoch == start_epoch:
                 line += (

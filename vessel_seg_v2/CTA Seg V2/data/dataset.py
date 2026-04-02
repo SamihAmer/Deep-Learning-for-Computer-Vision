@@ -254,6 +254,58 @@ def discover_cases(data_dir: str, modality: str = "ct") -> List[Dict[str, str]]:
     return cases
 
 
+def discover_topbrain_cases(data_dir: str, modality: str = "ct") -> List[Dict[str, str]]:
+    """Find all image/label pairs in the TopBrain directory.
+
+    TopBrain uses a different layout from TopCoW:
+        topbrain/TopBrain_Data_Release_Batches1n2_081425/
+            imagesTr_topbrain_ct/   (instead of imagesTr/)
+            labelsTr_topbrain_ct/   (instead of labelsTr/)
+
+    TopBrain provides the same scans as TopCoW but with richer labels
+    (40 vessel classes for CT instead of 13). When binarized, this gives
+    much more complete vessel coverage (vertebral arteries, SCAs, PICAs,
+    ophthalmic arteries, venous sinuses, etc.).
+
+    Args:
+        data_dir: root of TopBrain dataset (contains imagesTr_topbrain_ct/ etc.)
+                  If the directory contains a single subdirectory (e.g.
+                  TopBrain_Data_Release_Batches1n2_081425/), we descend into it.
+        modality: "ct", "mr", or "all"
+    """
+    # Handle nested extraction directory (e.g. topbrain/TopBrain_Data_Release_*)
+    subdirs = [d for d in os.listdir(data_dir)
+               if os.path.isdir(os.path.join(data_dir, d)) and d.startswith("TopBrain")]
+    if subdirs and not os.path.exists(os.path.join(data_dir, f"imagesTr_topbrain_{modality}")):
+        data_dir = os.path.join(data_dir, subdirs[0])
+
+    modalities = [modality] if modality != "all" else ["ct", "mr"]
+    cases = []
+
+    for mod in modalities:
+        image_dir = os.path.join(data_dir, f"imagesTr_topbrain_{mod}")
+        label_dir = os.path.join(data_dir, f"labelsTr_topbrain_{mod}")
+
+        if not os.path.isdir(image_dir):
+            print(f"Warning: TopBrain image dir not found: {image_dir}")
+            continue
+        if not os.path.isdir(label_dir):
+            print(f"Warning: TopBrain label dir not found: {label_dir}")
+            continue
+
+        images = sorted(glob.glob(os.path.join(image_dir, "*.nii.gz")))
+        for img_path in images:
+            basename = os.path.basename(img_path)
+            lbl_name = basename.replace("_0000", "")
+            lbl_path = os.path.join(label_dir, lbl_name)
+            if os.path.exists(lbl_path):
+                cases.append({"image": img_path, "label": lbl_path})
+            else:
+                print(f"Warning: no TopBrain label found for {basename}, skipping.")
+
+    return cases
+
+
 def train_val_split(
     cases: List[Dict[str, str]], ratio: float = 0.8, seed: int = 42
 ) -> Tuple[List, List]:

@@ -60,4 +60,9 @@ CONFIG = {
 
     # ── Profiling ────────────────────────────────────────────────────────
     "profile": True,                           # track wall-clock time and GPU memory per epoch
+
+    # ── Fine-tuning ──────────────────────────────────────────────────────
+    "finetune_lr": 1e-4,                       # lower LR for fine-tuning (10x less than from-scratch)
+    "finetune_epochs": 150,                    # fewer epochs needed when fine-tuning
+    "finetune_warmup_epochs": 5,               # shorter warmup for fine-tuning
 }

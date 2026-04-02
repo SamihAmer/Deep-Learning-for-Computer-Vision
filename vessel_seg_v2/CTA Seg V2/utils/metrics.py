@@ -129,21 +129,27 @@ def evaluate_volume(
     pred: np.ndarray,
     gt: np.ndarray,
     voxel_spacing: tuple = (1, 1, 1),
+    quick: bool = False,
 ) -> Dict[str, float]:
     """
-    Run all metrics on a single predicted/ground-truth volume pair.
-    Metrics are computed in parallel where possible.
+    Run metrics on a single predicted/ground-truth volume pair.
 
     Args:
         pred: binary prediction mask (D, H, W)
         gt: binary ground truth mask (D, H, W)
         voxel_spacing: (D, H, W) spacing in mm for HD95
+        quick: if True, only compute Dice (skips clDice/HD95/Betti which are
+               slow due to skeletonize_3d and distance_transform_edt).
+               Use during training; full metrics for final evaluation.
 
     Returns:
-        dict with keys: "dice", "cldice", "hd95", "betti0_error"
+        dict with keys: "dice" (always), plus "cldice", "hd95", "betti0_error" if not quick
     """
     pred_bin = (pred > 0).astype(np.uint8)
     gt_bin = (gt > 0).astype(np.uint8)
+
+    if quick:
+        return {"dice": compute_dice(pred_bin, gt_bin)}
 
     # Run all four metrics concurrently (they're independent and CPU-bound)
     with ThreadPoolExecutor(max_workers=4) as pool:
