@@ -7,6 +7,10 @@ vessel_seg_v2/CTA Seg V2/data/TopCoW2024_Data_Release/
 vessel_seg_v2/CTA Seg V2/data/*.zip
 vessel_seg_v2/CTA Seg V2/data/TopBrain_README/
 
+# Virtual environments
+venv/
+*.onnx.data
+
 # Python caches
 __pycache__/
 *.py[cod]
