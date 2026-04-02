@@ -87,12 +87,38 @@ GROUP_NAMES = {
 }
 
 
+def _eval_one_class(class_id, name, pred_binary, gt_multiclass):
+    """Evaluate a single vessel class. Used for parallel dispatch."""
+    gt_mask = (gt_multiclass == class_id).astype(np.uint8)
+    n_gt_voxels = gt_mask.sum()
+
+    if n_gt_voxels == 0:
+        return name, {
+            "dice": float("nan"),
+            "cldice": float("nan"),
+            "betti0_error": float("nan"),
+            "present": False,
+            "gt_voxels": 0,
+        }
+
+    pred_in_region = (pred_binary > 0).astype(np.uint8) * _dilate_mask(gt_mask, radius=3)
+
+    return name, {
+        "dice": compute_dice(pred_in_region, gt_mask),
+        "cldice": compute_cldice(pred_in_region, gt_mask),
+        "betti0_error": compute_betti0_error(pred_in_region, gt_mask),
+        "present": True,
+        "gt_voxels": int(n_gt_voxels),
+    }
+
+
 def evaluate_per_class(
     pred_binary: np.ndarray,
     gt_multiclass: np.ndarray,
 ) -> Dict[str, Dict[str, float]]:
     """
     Compute metrics for each vessel class separately.
+    Classes are evaluated in parallel using a thread pool.
 
     Args:
         pred_binary: (D, H, W) binary prediction (0 = background, 1 = vessel)
@@ -103,15 +129,16 @@ def evaluate_per_class(
         "present" indicates whether this vessel class exists in the ground truth
         (communicating arteries are absent in some patients).
     """
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Only evaluate classes that exist in this volume's GT
+    present_ids = set(np.unique(gt_multiclass).astype(int)) - {0}
+
     results = {}
 
+    # Mark absent classes immediately (no computation needed)
     for class_id, name in VESSEL_CLASSES.items():
-        # Create binary masks for this specific vessel class
-        gt_mask = (gt_multiclass == class_id).astype(np.uint8)
-        n_gt_voxels = gt_mask.sum()
-
-        if n_gt_voxels == 0:
-            # This vessel is absent in this patient (common for Pcom, Acom, 3rd-A2)
+        if class_id not in present_ids:
             results[name] = {
                 "dice": float("nan"),
                 "cldice": float("nan"),
@@ -119,19 +146,18 @@ def evaluate_per_class(
                 "present": False,
                 "gt_voxels": 0,
             }
-            continue
 
-        # Mask the binary prediction to the region where this vessel exists
-        # plus a small dilation margin to catch near-misses
-        pred_in_region = (pred_binary > 0).astype(np.uint8) * _dilate_mask(gt_mask, radius=3)
+    # Evaluate present classes in parallel
+    present_classes = [(cid, name) for cid, name in VESSEL_CLASSES.items() if cid in present_ids]
 
-        results[name] = {
-            "dice": compute_dice(pred_in_region, gt_mask),
-            "cldice": compute_cldice(pred_in_region, gt_mask),
-            "betti0_error": compute_betti0_error(pred_in_region, gt_mask),
-            "present": True,
-            "gt_voxels": int(n_gt_voxels),
-        }
+    with ThreadPoolExecutor(max_workers=min(8, len(present_classes) or 1)) as pool:
+        futures = [
+            pool.submit(_eval_one_class, cid, name, pred_binary, gt_multiclass)
+            for cid, name in present_classes
+        ]
+        for fut in futures:
+            name, result = fut.result()
+            results[name] = result
 
     return results
 

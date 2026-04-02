@@ -18,7 +18,7 @@ import numpy as np
 import torch
 
 from configs.default import CONFIG
-from data.dataset import discover_cases, train_val_split, load_nifti, preprocess_ct
+from data.dataset import discover_cases, discover_topbrain_cases, train_val_split, load_nifti, preprocess_ct
 from models.unet3d import UNet3D
 from utils.inference import sliding_window_inference
 from utils.metrics import evaluate_volume
@@ -32,6 +32,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Stratified evaluation")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to best_model.pth")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to TopCoW dataset root")
+    parser.add_argument("--topbrain_dir", type=str, default=None,
+                        help="Path to TopBrain dataset root (evaluate on TopBrain labels instead of TopCoW)")
     parser.add_argument("--gpu", type=int, default=0)
     return parser.parse_args()
 
@@ -64,7 +66,11 @@ def main():
 
     # Discover cases and get the same val split used during training
     modality = cfg.get("modality", "ct")
-    all_cases = discover_cases(cfg["data_dir"], modality=modality)
+    if args.topbrain_dir:
+        all_cases = discover_topbrain_cases(args.topbrain_dir, modality=modality)
+        print(f"Using TopBrain data ({len(all_cases)} cases, 40-class labels)")
+    else:
+        all_cases = discover_cases(cfg["data_dir"], modality=modality)
     _, val_cases = train_val_split(all_cases, cfg["train_val_split"])
     ct_count = sum(1 for c in val_cases if "topcow_ct_" in os.path.basename(c["image"]))
     mr_count = sum(1 for c in val_cases if "topcow_mr_" in os.path.basename(c["image"]))
@@ -144,24 +150,46 @@ def main():
         else:
             print(f"  {name:<12} {'n/a':>10} {'n/a':>10} {'n/a':>10} {0:>5}")
 
-    # Grouped: large vs small
-    from utils.stratified_eval import LARGE_VESSELS, SMALL_VESSELS
+    # Grouped: all 6 vessel groups
+    from utils.stratified_eval import (
+        LARGE_VESSELS, SMALL_VESSELS, DISTAL_VESSELS,
+        POSTERIOR_FOSSA, SMALL_ARTERIES, VENOUS, GROUP_NAMES,
+    )
 
-    large_dice = [d for cid, name in VESSEL_CLASSES.items() if cid in LARGE_VESSELS for d in class_dice[name]]
-    small_dice = [d for cid, name in VESSEL_CLASSES.items() if cid in SMALL_VESSELS for d in class_dice[name]]
-    large_cldice = [d for cid, name in VESSEL_CLASSES.items() if cid in LARGE_VESSELS for d in class_cldice[name]]
-    small_cldice = [d for cid, name in VESSEL_CLASSES.items() if cid in SMALL_VESSELS for d in class_cldice[name]]
+    group_sets = {
+        "large": LARGE_VESSELS,
+        "small": SMALL_VESSELS,
+        "distal": DISTAL_VESSELS,
+        "posterior_fossa": POSTERIOR_FOSSA,
+        "small_arteries": SMALL_ARTERIES,
+        "venous": VENOUS,
+    }
 
-    print(f"\n  {'Group':<35} {'DSC':>10} {'clDice':>10}")
-    print(f"  {'-'*58}")
-    if large_dice:
-        print(f"  {'Large (BA,ICA,MCA,PCA,ACA)':<35} {np.mean(large_dice):>10.4f} {np.mean(large_cldice):>10.4f}")
-    if small_dice:
-        print(f"  {'Small (Acom,Pcom,3rd-A2)':<35} {np.mean(small_dice):>10.4f} {np.mean(small_cldice):>10.4f}")
-    if large_dice and small_dice:
-        gap_d = np.mean(large_dice) - np.mean(small_dice)
-        gap_c = np.mean(large_cldice) - np.mean(small_cldice)
-        print(f"  {'Gap (large - small)':<35} {gap_d:>10.4f} {gap_c:>10.4f}")
+    group_dice = {}
+    group_cldice = {}
+    for gname, gids in group_sets.items():
+        group_dice[gname] = [d for cid, name in VESSEL_CLASSES.items() if cid in gids for d in class_dice[name]]
+        group_cldice[gname] = [d for cid, name in VESSEL_CLASSES.items() if cid in gids for d in class_cldice[name]]
+
+    print(f"\n  {'Group':<50} {'DSC':>8} {'clDice':>8} {'N':>5}")
+    print(f"  {'-'*74}")
+    for gname in group_sets:
+        d_vals = group_dice[gname]
+        c_vals = group_cldice[gname]
+        label = GROUP_NAMES.get(gname, gname)
+        if d_vals:
+            print(f"  {label:<50} {np.mean(d_vals):>8.4f} {np.mean(c_vals):>8.4f} {len(d_vals):>5}")
+        else:
+            print(f"  {label:<50} {'n/a':>8} {'n/a':>8} {0:>5}")
+
+    # Gap: large vs each other group
+    if group_dice["large"]:
+        print(f"\n  Gaps (large vessel DSC - other group DSC):")
+        large_mean = np.mean(group_dice["large"])
+        for gname in ["small", "distal", "posterior_fossa", "small_arteries", "venous"]:
+            if group_dice[gname]:
+                gap = large_mean - np.mean(group_dice[gname])
+                print(f"    vs {GROUP_NAMES.get(gname, gname)}: {gap:+.4f}")
 
     # Save results to JSON
     out_dir = os.path.dirname(args.checkpoint)
@@ -177,10 +205,12 @@ def main():
             for name in VESSEL_CLASSES.values()
         },
         "grouped": {
-            "large_dice": float(np.mean(large_dice)) if large_dice else None,
-            "small_dice": float(np.mean(small_dice)) if small_dice else None,
-            "large_cldice": float(np.mean(large_cldice)) if large_cldice else None,
-            "small_cldice": float(np.mean(small_cldice)) if small_cldice else None,
+            gname: {
+                "dice": float(np.mean(group_dice[gname])) if group_dice[gname] else None,
+                "cldice": float(np.mean(group_cldice[gname])) if group_cldice[gname] else None,
+                "n": len(group_dice[gname]),
+            }
+            for gname in group_sets
         },
     }
 
