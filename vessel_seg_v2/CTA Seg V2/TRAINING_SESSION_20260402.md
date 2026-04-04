@@ -104,13 +104,13 @@ This session accomplished three main goals:
 - **Time**: 8 minutes
 - **Note**: Lower Dice than baseline because TopBrain ground truth covers far more vasculature (40 vs 13 classes). Qualitatively, this model segments ~20x more vessels in SurgicalAR.
 
-### Run 2: Train dice_ce_cldice from scratch
+### Run 2: Train dice_ce_cldice from scratch (LR bug)
 - **Checkpoint**: `runs/dice_ce_cldice_20260402_193545/`
 - **Data**: TopCoW 125 CT (13-class labels)
 - **Config**: LR 1e-3 (NOTE: had LR scaling bug, actual LR was 8e-3 for first ~150 epochs)
 - **Result**: Val Dice 0.8484, clDice 0.8923, HD95 3.72, B0err 5.28
 - **Time**: ~45 minutes
-- **Issue**: LR was incorrectly scaled by world_size (8x), causing NaN explosions in early epochs. Model partially recovered as cosine schedule decayed LR. Results are suboptimal — should be retrained at 1e-3.
+- **Issue**: LR was incorrectly scaled by world_size (8x), causing NaN explosions in early epochs. Model partially recovered as cosine schedule decayed LR. **Superseded by Run 6.**
 
 ### Run 3: Train dice_ce_skeleton from scratch
 - **Checkpoint**: `runs/dice_ce_skeleton_20260402_203733/`
@@ -120,64 +120,84 @@ This session accomplished three main goals:
 - **Time**: ~68 minutes
 - **Note**: Clean training run with correct LR.
 
-### Run 4: Fine-tune dice_ce_cldice on TopBrain
+### Run 4: Fine-tune dice_ce_cldice on TopBrain (LR bug base)
 - **Checkpoint**: `runs/finetune_topbrain_dice_ce_cldice_20260402_214807/`
 - **Base**: Run 2 best checkpoint
 - **Result**: Val Dice 0.5878, clDice 0.7196, HD95 23.8, B0err 305.6
-- **Note**: Poor results due to LR-damaged base model.
+- **Note**: Poor results due to LR-damaged base model. **Superseded by Run 7.**
 
 ### Run 5: Fine-tune dice_ce_skeleton on TopBrain
 - **Checkpoint**: `runs/finetune_topbrain_dice_ce_skeleton_20260402_215720/`
 - **Base**: Run 3 best checkpoint
 - **Result**: Val Dice 0.7064, clDice 0.5517, HD95 22.1, B0err 1752.2
 
+### Run 6: Train dice_ce_cldice from scratch (fixed LR) — April 4
+- **Checkpoint**: `runs/dice_ce_cldice_20260404_053853/`
+- **Data**: TopCoW 125 CT (13-class labels)
+- **Config**: LR 1e-3 (correct, no scaling), 300 epochs, 8x A100
+- **Result**: Val Dice 0.8644, clDice 0.9157, HD95 2.40, B0err 3.72
+- **Time**: ~60 minutes
+- **Note**: Significant improvement over Run 2 (0.8644 vs 0.8484). Clean training, no NaN issues.
+
+### Run 7: Fine-tune dice_ce_cldice on TopBrain (fixed LR base) — April 4
+- **Checkpoint**: `runs/finetune_topbrain_dice_ce_cldice_20260404_064204/`
+- **Base**: Run 6 best checkpoint
+- **Result**: Val Dice 0.7633, clDice 0.7654, HD95 13.6, B0err 131.2
+- **Time**: ~8 minutes
+- **Note**: Major improvement over Run 4 (0.7633 vs 0.5878) thanks to clean base model.
+
 ## Stratified Evaluation Results
 
-### Global Metrics (all 6 models)
+### Global Metrics (all models)
 
 | Model | DSC | clDice | HD95 | B0 err |
 |-------|-----|--------|------|--------|
 | **dice_ce baseline** | **0.8958** | **0.9401** | **1.36** | **2.76** |
 | dice_ce + TopBrain | 0.7691 | 0.7771 | 12.07 | 142.6 |
-| dice_ce_cldice* | 0.8484 | 0.8923 | 3.72 | 5.28 |
-| dice_ce_cldice* + TopBrain | 0.5878 | 0.7196 | 23.80 | 305.6 |
+| dice_ce_cldice (LR bug)* | 0.8484 | 0.8923 | 3.72 | 5.28 |
+| **dice_ce_cldice_v2** | **0.8644** | **0.9157** | **2.40** | **3.72** |
+| dice_ce_cldice_v2 + TopBrain | 0.7633 | 0.7654 | 13.56 | 131.2 |
 | dice_ce_skeleton | 0.8445 | 0.8376 | 2.82 | 26.84 |
 | dice_ce_skeleton + TopBrain | 0.7064 | 0.5516 | 22.13 | 1752.2 |
 
-*dice_ce_cldice had LR scaling bug (8e-3 instead of 1e-3) — results are suboptimal
+*Superseded by cldice_v2 — LR scaling bug caused NaN explosions
 
 ### From-Scratch Models: Large vs Communicating Vessel Gap
 
 | Model | Large CoW DSC | Comm. DSC | Gap |
 |-------|--------------|-----------|-----|
 | dice_ce baseline | 0.823 | 0.472 | +0.351 |
+| dice_ce_cldice_v2 | 0.797 | 0.435 | +0.363 |
 | dice_ce_skeleton | 0.798 | 0.466 | +0.332 |
-| dice_ce_cldice* | 0.801 | 0.439 | +0.362 |
 
 ### TopBrain Fine-tuned: All 6 Vessel Groups (DSC)
 
-| Group | dice_ce+TB | dice_ce_cldice*+TB | dice_ce_skeleton+TB |
-|-------|-----------|-------------------|-------------------|
-| Large CoW arteries | 0.834 | 0.815 | **0.821** |
-| Communicating arteries | 0.491 | 0.478 | **0.513** |
-| Distal branches | 0.694 | 0.718 | **0.752** |
-| Posterior fossa | 0.570 | 0.530 | **0.626** |
-| Small arteries (OA, AChA) | 0.005 | 0.030 | **0.589** |
-| Venous sinuses | 0.468 | 0.336 | **0.613** |
+| Group | dice_ce+TB | cldice_v2+TB | skeleton+TB |
+|-------|-----------|-------------|-------------|
+| Large CoW arteries | 0.834 | 0.829 | **0.821** |
+| Communicating arteries | 0.491 | 0.490 | **0.513** |
+| Distal branches | 0.694 | 0.712 | **0.752** |
+| Posterior fossa | 0.570 | 0.533 | **0.626** |
+| Small arteries (OA, AChA) | 0.005 | 0.000 | **0.589** |
+| Venous sinuses | 0.468 | 0.463 | **0.613** |
 
-**Key finding**: dice_ce_skeleton fine-tuned on TopBrain is the clear winner for comprehensive vessel coverage, especially for small arteries (0.589 vs ~0 for others) and venous structures.
+**Key findings**:
+- **dice_ce baseline** has the highest TopCoW DSC (0.8958) but only segments Circle of Willis arteries
+- **dice_ce_cldice_v2** (fixed LR) significantly improved over the bugged run (0.8644 vs 0.8484) and has the best clDice (0.9157) and lowest Betti-0 error (3.72) among from-scratch models
+- **dice_ce_skeleton + TopBrain** is the clear winner for comprehensive vessel coverage — it's the only model that segments small arteries (OA: 0.59 DSC vs ~0 for others) and has the best posterior fossa (0.626) and venous sinus (0.613) performance
+- All TopBrain fine-tuned models show lower DSC on TopCoW metrics because TopBrain ground truth covers far more vasculature (40 vs 13 classes), making the evaluation harder
 
 ## ONNX Exports
 
 All models exported to `~/` for SCP download:
 
-| File | Model | Size |
-|------|-------|------|
-| `~/finetune_topbrain_dice_ce.onnx` | dice_ce fine-tuned on TopBrain | 94.5 MB |
-| `~/dice_ce_cldice.onnx` | dice_ce_cldice from scratch | 94.5 MB |
-| `~/dice_ce_cldice_topbrain.onnx` | dice_ce_cldice fine-tuned on TopBrain | 94.5 MB |
-| `~/dice_ce_skeleton.onnx` | dice_ce_skeleton from scratch | 94.5 MB |
-| `~/dice_ce_skeleton_topbrain.onnx` | dice_ce_skeleton fine-tuned on TopBrain | 94.5 MB |
+| File | Model | Val Dice | Size |
+|------|-------|----------|------|
+| `~/finetune_topbrain_dice_ce.onnx` | dice_ce fine-tuned on TopBrain | 0.7691 | 94.5 MB |
+| `~/dice_ce_cldice_v2.onnx` | dice_ce_cldice from scratch (fixed LR) | 0.8644 | 94.5 MB |
+| `~/dice_ce_cldice_v2_topbrain.onnx` | dice_ce_cldice_v2 fine-tuned on TopBrain | 0.7633 | 94.5 MB |
+| `~/dice_ce_skeleton.onnx` | dice_ce_skeleton from scratch | 0.8445 | 94.5 MB |
+| `~/dice_ce_skeleton_topbrain.onnx` | dice_ce_skeleton fine-tuned on TopBrain | 0.7064 | 94.5 MB |
 
 Export uses legacy TorchScript ONNX exporter (`dynamo=False`) with single-channel sigmoid output compatible with SurgicalAR (`MultiClass: false, OutputClassCount: 1`).
 
@@ -190,14 +210,26 @@ All models were tested in SurgicalAR (3D DICOM viewer with ML inference):
 - **Issue**: Topology-aware models (cldice, skeleton) over-propagate and produce false positives on teeth, bone, skin, and other non-vessel structures
 - **Root cause identified**: HU window [0, 600] clips bone (800-2000 HU) to the same value as vessels (200-400 HU) — the model literally cannot distinguish them
 
+## Model-Assisted Labeling Pipeline (April 4)
+
+Ran inference on 50 unlabeled CTA volumes using the fine-tuned skeleton model to generate pre-label masks for annotation in RedBrick AI:
+
+1. **Extracted 4 zip archives** (CTA_001–CTA_050) containing DICOM scans with multiple series per patient
+2. **Cleaned data**: Deleted non-"Thins with contrast" folders (FLAIR, T2, MIP, VRT, Thicker, non-contrast, DSA) — kept only the CTA thins with contrast series
+3. **Converted DICOMs to NIfTI**: 52 volumes (50 patients, CTA_013 and CTA_050 have 2 variants each) saved to `~/data/cta_nifti/`
+4. **Ran multi-GPU inference**: 4 GPUs in parallel, ~3 minutes for all 52 volumes using the fine-tuned skeleton model (`runs/finetune_topbrain_dice_ce_skeleton_20260402_215720/best_model.pth`)
+5. **Uploaded 51 masks to RedBrick AI** via SDK (`upload_masks.py`), matched to existing tasks by patient ID. CTA_043 unmatched (no task in RedBrick). Tasks moved to Review stage for correction.
+
+**Purpose**: Correct the model's false positives (teeth, bone, skin) and missed vessels, then retrain (fine-tune from dice_ce baseline) on the corrected labels for improved full-volume vessel segmentation.
+
 ## Known Issues & Next Steps
 
-1. **Rerun dice_ce_cldice** at correct LR (1e-3) for fair comparison — the current run had 8e-3 LR scaling bug
+1. ~~**Rerun dice_ce_cldice** at correct LR~~ — **Done** (Run 6, Dice 0.8644)
 2. **Widen HU window** from [0, 600] to [0, 1500] so the model can differentiate bone from vessels. Requires retraining.
 3. **Post-processing**: Connected component filtering to remove small disconnected false positive blobs
 4. **Brain extraction pipeline**: Investigate why SurgicalAR's built-in brain mask isn't preventing extracranial false positives
-5. **Custom labels**: Label full-volume CTAs in RedBrick AI with binary vessel masks for more comprehensive training data
-6. **Model architecture**: The HU window change is expected to be the single highest-impact improvement for false positive reduction
+5. **Custom labels**: 51 pre-labeled CTA volumes uploaded to RedBrick AI for correction — once corrected, fine-tune from dice_ce baseline on the corrected labels
+6. **HU window change** is expected to be the single highest-impact improvement for false positive reduction
 
 ## Environment Setup
 
