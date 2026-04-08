@@ -1,0 +1,76 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{chen2023}
+\citation{yang2023}
+\citation{isensee2021}
+\citation{isensee2024}
+\citation{shit2021}
+\citation{shit2021}
+\citation{kirchhoff2024}
+\citation{shi2024cbd}
+\citation{acebes2024}
+\citation{berger2024,stucki2023}
+\citation{shi2023nextou}
+\citation{rouge2024}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\citation{yang2023}
+\citation{isensee2021,isensee2024}
+\citation{he2015}
+\citation{shit2021}
+\citation{kirchhoff2024}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Datasets}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}TopCoW 2024}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}TopBrain 2025}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Methods}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Architecture: 3D U-Net}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level.}}{2}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:architecture}{{1}{2}{3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level}{figure.caption.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Loss Functions}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}1}Dice + Cross-Entropy (Baseline)}{2}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}2}Dice + CE + Soft-clDice}{2}{subsubsection.3.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}3}Dice + CE + Skeleton Recall}{3}{subsubsection.3.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Preprocessing and Augmentation}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Training Procedure}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experiments and Results}{3}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Training Dynamics}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Training dynamics for the Dice+CE baseline over 300 epochs. \textbf  {Top:} Training loss (left axis) and learning rate (right axis). \textbf  {Bottom:} Training Dice (per-epoch) and validation Dice (every 25 epochs).}}{3}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:learning_curves}{{2}{3}{Training dynamics for the Dice+CE baseline over 300 epochs. \textbf {Top:} Training loss (left axis) and learning rate (right axis). \textbf {Bottom:} Training Dice (per-epoch) and validation Dice (every 25 epochs)}{figure.caption.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Global Evaluation Metrics on TopCoW Validation Set}}{3}{table.caption.3}\protected@file@percent }
+\newlabel{tab:global}{{I}{3}{Global Evaluation Metrics on TopCoW Validation Set}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Global Metric Comparison}{3}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Stratified Per-Vessel Analysis}{3}{subsection.4.3}\protected@file@percent }
+\citation{isensee2024}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Stratified Per-Vessel DSC and clDice (Dice+CE Baseline)}}{4}{table.caption.4}\protected@file@percent }
+\newlabel{tab:stratified}{{II}{4}{Stratified Per-Vessel DSC and clDice (Dice+CE Baseline)}{table.caption.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Large vs.\ Communicating Vessel Gap (From-Scratch Models)}}{4}{table.caption.5}\protected@file@percent }
+\newlabel{tab:gap}{{III}{4}{Large vs.\ Communicating Vessel Gap (From-Scratch Models)}{table.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}TopBrain Fine-Tuning: Comprehensive Vessel Coverage}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Computational Cost}{4}{subsection.4.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces TopBrain Fine-Tuned Models: DSC by Vessel Group (40 Classes)}}{4}{table.caption.6}\protected@file@percent }
+\newlabel{tab:topbrain}{{IV}{4}{TopBrain Fine-Tuned Models: DSC by Vessel Group (40 Classes)}{table.caption.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Computational Cost Comparison}}{4}{table.caption.7}\protected@file@percent }
+\newlabel{tab:compute}{{V}{4}{Computational Cost Comparison}{table.caption.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Discussion}{4}{section.5}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibcite{isensee2021}{1}
+\bibcite{yang2023}{2}
+\bibcite{shit2021}{3}
+\bibcite{isensee2024}{4}
+\bibcite{kirchhoff2024}{5}
+\bibcite{shi2024cbd}{6}
+\bibcite{acebes2024}{7}
+\bibcite{berger2024}{8}
+\bibcite{shi2023nextou}{9}
+\bibcite{rouge2024}{10}
+\bibcite{fu2020}{11}
+\bibcite{patel2023}{12}
+\bibcite{chen2023}{13}
+\bibcite{stucki2023}{14}
+\bibcite{mou2021}{15}
+\bibcite{he2015}{16}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Conclusion}{5}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{5}{section*.8}\protected@file@percent }
+\gdef \@abspage@last{5}
