@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  8 APR 2026 10:03
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  8 APR 2026 18:59
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -588,31 +588,27 @@ nslations-basic-dictionary')
 )
 Package translations Info: loading dictionary `translations-basic-dictionary' f
 or `english'. on input line 16.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 31.
 
-Underfull \hbox (badness 5050) in paragraph at lines 53--54
-[]\OT1/ptm/m/n/10 A con-trolled three-way com-par-i-son of Dice+CE,
- []
-
-[1{C:/Users/Samih/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/Sa
-mih/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc}
-
-
-]
-Underfull \hbox (badness 1708) in paragraph at lines 55--56
-\OT1/ptm/m/n/10 (40 ves-sel classes), re-veal-ing that Skele-ton Re-call
- []
-
-LaTeX Font Info:    Trying to load font information for U+msa on input line 75.
 
 (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 75.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 31.
 
 
 (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
+[1{C:/Users/Samih/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/Sa
+mih/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc}
+
+
+]
+Underfull \hbox (badness 5050) in paragraph at lines 53--54
+[]\OT1/ptm/m/n/10 A con-trolled three-way com-par-i-son of Dice+CE,
+ []
+
 <figures/unet3d_architecture.pdf, id=125, 252.945pt x 180.675pt>
 File: figures/unet3d_architecture.pdf Graphic file (type pdf)
 <use figures/unet3d_architecture.pdf>
@@ -627,8 +623,10 @@ Overfull \hbox (41.9287pt too wide) detected at line 102
 1/cmr/m/n/10 ([][](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 )))
  []
 
+[2 <./figures/unet3d_architecture.pdf>]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 1
 15.
+
 (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
@@ -642,14 +640,12 @@ Underfull \hbox (badness 1389) in paragraph at lines 115--116
 \OT1/ptm/m/n/10 the ground truth on CPU us-ing mor-pho-log-i-cal thin-ning
  []
 
-[2 <./figures/unet3d_architecture.pdf>]
-<figures/learning_curves.pdf, id=199, 239.66225pt x 276.49391pt>
+<figures/learning_curves.pdf, id=200, 240.17354pt x 276.49391pt>
 File: figures/learning_curves.pdf Graphic file (type pdf)
 <use figures/learning_curves.pdf>
 Package pdftex.def Info: figures/learning_curves.pdf  used on input line 140.
-(pdftex.def)             Requested size: 252.0pt x 290.73218pt.
- [3 <./figures/learning_curves.pdf>]
-[4]
+(pdftex.def)             Requested size: 252.0pt x 290.10777pt.
+[3 <./figures/learning_curves.pdf>] [4]
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -666,17 +662,21 @@ Before submitting the final camera ready copy, remember to:
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
  ***********
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
 Package rerunfilecheck Info: File `midterm_report.out' has not changed.
 (rerunfilecheck)             Checksum: 01CB39FDE9D251761527FFF8C7A96897;3289.
  ) 
 Here is how much of TeX's memory you used:
- 16771 strings out of 474486
- 333482 string characters out of 5743756
+ 16781 strings out of 474486
+ 333578 string characters out of 5743756
  1954542 words of memory out of 5000000
- 38823 multiletter control sequences out of 15000+600000
- 597178 words of font info for 110 fonts, out of 8000000 for 9000
+ 38829 multiletter control sequences out of 15000+600000
+ 598723 words of font info for 116 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,11n,79p,1461b,1127s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,11n,79p,1668b,1081s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/
 cmex10.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/ams
 fonts/cm/cmmi10.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/p
@@ -687,15 +687,16 @@ ms/MiKTeX/fonts/type1/public/amsfonts/cm/cmr8.pfb><C:/Users/Samih/AppData/Local
 /Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/Samih/AppD
 ata/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy7.pfb><C:/Users/Sa
 mih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy8.pfb><C:/
-Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/courier/ucrr8a.pfb><C
-:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmb8a.pfb><C
-:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmbi8a.pfb><
-C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr8a.pfb><
-C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmri8a.pfb>
-
-Output written on midterm_report.pdf (5 pages, 253031 bytes).
+Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy9.
+pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/courier/ucrr8
+a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmb8
+a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmbi
+8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr
+8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr
+i8a.pfb>
+Output written on midterm_report.pdf (5 pages, 267336 bytes).
 PDF statistics:
- 344 PDF objects out of 1000 (max. 8388607)
+ 351 PDF objects out of 1000 (max. 8388607)
  60 named destinations out of 1000 (max. 500000)
  179 words of extra memory for PDF output out of 10000 (max. 10000000)
 

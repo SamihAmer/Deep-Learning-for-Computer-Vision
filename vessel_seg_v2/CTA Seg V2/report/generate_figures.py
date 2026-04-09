@@ -44,68 +44,64 @@ plt.rcParams.update({
 OUTDIR = os.path.join(os.path.dirname(__file__), "figures")
 os.makedirs(OUTDIR, exist_ok=True)
 
+def save_fig(fig, name):
+    """Save figure as both PDF (for LaTeX) and PNG (for PPTX)."""
+    fig.savefig(os.path.join(OUTDIR, name + ".pdf"))
+    fig.savefig(os.path.join(OUTDIR, name + ".png"))
+    plt.close(fig)
+    print(f"Saved {name}.pdf + .png")
+
 
 def load_log(path):
     with open(path) as f:
         return json.load(f)
 
 
-def plot_learning_curves(log, label="Dice+CE", color="C0", outfile="learning_curves.pdf"):
-    """Plot training loss, training dice, validation dice, and LR schedule."""
-    epochs = [e["epoch"] for e in log]
-    train_loss = [e["train_loss"] for e in log]
-    train_dice = [e["train_dice"] for e in log]
-    lr = [e["lr"] for e in log]
-
-    # Extract validation points
-    val_epochs = [e["epoch"] for e in log if "dice" in e]
-    val_dice = [e["dice"] for e in log if "dice" in e]
-
+def plot_learning_curves_overlay(logs, labels, colors, outfile="learning_curves.pdf"):
+    """Plot overlaid training loss and validation dice for multiple models."""
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 4.0), sharex=True)
+    window = 15
 
-    # Top: Loss + LR
-    ax1.plot(epochs, train_loss, color="C3", linewidth=0.8, alpha=0.6, label="Train loss")
-    # Smoothed loss
-    window = 10
-    if len(train_loss) > window:
-        smooth = np.convolve(train_loss, np.ones(window)/window, mode="valid")
-        ax1.plot(epochs[window-1:], smooth, color="C3", linewidth=1.5, label=f"Loss (smoothed)")
-    ax1.set_ylabel("Loss")
-    ax1.set_ylim(0, 1.0)
+    for log, label, color in zip(logs, labels, colors):
+        epochs = [e["epoch"] for e in log]
+        train_loss = [e["train_loss"] for e in log]
+        train_dice = [e["train_dice"] for e in log]
 
-    ax1r = ax1.twinx()
-    ax1r.plot(epochs, lr, color="C4", linewidth=1.0, linestyle="--", alpha=0.7, label="Learning rate")
-    ax1r.set_ylabel("Learning rate", color="C4")
-    ax1r.tick_params(axis="y", labelcolor="C4")
-    ax1r.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x:.0e}"))
+        val_epochs = [e["epoch"] for e in log if "dice" in e]
+        val_dice = [e["dice"] for e in log if "dice" in e]
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax1r.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", framealpha=0.9)
+        # Top: smoothed training loss
+        if len(train_loss) > window:
+            smooth = np.convolve(train_loss, np.ones(window)/window, mode="valid")
+            ax1.plot(epochs[window-1:], smooth, color=color, linewidth=1.3, label=label)
+        else:
+            ax1.plot(epochs, train_loss, color=color, linewidth=1.3, label=label)
 
-    # Bottom: Dice
-    ax2.plot(epochs, train_dice, color="C0", linewidth=0.8, alpha=0.4)
-    if len(train_dice) > window:
-        smooth_dice = np.convolve(train_dice, np.ones(window)/window, mode="valid")
-        ax2.plot(epochs[window-1:], smooth_dice, color="C0", linewidth=1.5, label="Train Dice (smoothed)")
-    ax2.plot(val_epochs, val_dice, "s-", color="C1", markersize=4, linewidth=1.2, label="Val Dice")
-    ax2.set_ylabel("Dice Score")
+        # Bottom: smoothed training dice + validation dice markers
+        if len(train_dice) > window:
+            smooth_dice = np.convolve(train_dice, np.ones(window)/window, mode="valid")
+            ax2.plot(epochs[window-1:], smooth_dice, color=color, linewidth=1.0, alpha=0.5)
+        ax2.plot(val_epochs, val_dice, "s-", color=color, markersize=3, linewidth=1.2, label=label)
+
+    ax1.set_ylabel("Training Loss")
+    ax1.set_ylim(0.05, 0.6)
+    ax1.legend(loc="upper right", fontsize=7, framealpha=0.9)
+
+    ax2.set_ylabel("Validation Dice")
     ax2.set_xlabel("Epoch")
-    ax2.set_ylim(0.2, 1.0)
-    ax2.legend(loc="lower right", framealpha=0.9)
+    ax2.set_ylim(0.6, 0.95)
+    ax2.legend(loc="lower right", fontsize=7, framealpha=0.9)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, outfile))
-    plt.close()
-    print(f"Saved {outfile}")
+    save_fig(fig, outfile.replace(".pdf", ""))
 
 
 def plot_global_comparison():
     """Bar chart comparing global metrics across three loss configs."""
     models = ["Dice+CE", "Dice+CE\n+clDice", "Dice+CE\n+Skeleton"]
-    dsc =    [0.896, 0.864, 0.845]
-    cldice = [0.940, 0.916, 0.838]
-    hd95 =   [1.36,  2.40,  2.82]
+    dsc =    [0.858, 0.864, 0.845]
+    cldice = [0.907, 0.916, 0.838]
+    hd95 =   [2.48,  2.40,  2.82]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(3.5, 2.2))
 
@@ -131,20 +127,20 @@ def plot_global_comparison():
     ax2.bar_label(bars3, fmt="%.2f", fontsize=6, padding=1)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, "global_comparison.pdf"))
-    plt.close()
-    print("Saved global_comparison.pdf")
+    save_fig(fig, "global_comparison")
 
 
 def plot_stratified_vessels():
     """Horizontal bar chart of per-vessel DSC for baseline model."""
     vessels = [
-        "R-ICA", "R-MCA", "BA", "R-PCA", "L-ICA", "L-MCA", "L-PCA",
-        "Acom", "L-Pcom", "R-ACA", "L-ACA", "R-Pcom"
+        "L-ICA", "R-ICA", "L-MCA", "R-MCA", "BA", "R-PCA", "L-PCA",
+        "R-ACA", "L-ACA",
+        "R-Pcom", "L-Pcom", "Acom"
     ]
-    dsc = [0.858, 0.851, 0.821, 0.815, 0.814, 0.813, 0.812,
-           0.740, 0.729, 0.490, 0.462, 0.417]
-    colors = ["C0"]*7 + ["C3"]*5  # blue for large, red for communicating
+    dsc = [0.855, 0.846, 0.819, 0.807, 0.793, 0.802, 0.770,
+           0.725, 0.740,
+           0.459, 0.410, 0.413]
+    colors = ["C0"]*9 + ["C3"]*3  # blue for large, red for communicating
 
     fig, ax = plt.subplots(figsize=(3.5, 3.0))
     y = np.arange(len(vessels))
@@ -164,16 +160,14 @@ def plot_stratified_vessels():
     ax.legend(handles=legend_elements, loc="lower right", fontsize=7)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, "stratified_vessels.pdf"))
-    plt.close()
-    print("Saved stratified_vessels.pdf")
+    save_fig(fig, "stratified_vessels")
 
 
 def plot_topbrain_comparison():
     """Grouped bar chart: 6 vessel groups x 3 models (TopBrain fine-tuned)."""
     groups = ["Large CoW", "Communicating", "Distal\nbranches",
               "Posterior\nfossa", "Small\narteries", "Venous\nsinuses"]
-    dice_ce  = [0.834, 0.491, 0.694, 0.570, 0.005, 0.468]
+    dice_ce  = [0.832, 0.466, 0.687, 0.565, 0.000, 0.416]
     cldice   = [0.829, 0.490, 0.712, 0.533, 0.000, 0.463]
     skeleton = [0.821, 0.513, 0.752, 0.626, 0.589, 0.613]
 
@@ -192,17 +186,15 @@ def plot_topbrain_comparison():
     ax.legend(fontsize=7, loc="upper right")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, "topbrain_comparison.pdf"))
-    plt.close()
-    print("Saved topbrain_comparison.pdf")
+    save_fig(fig, "topbrain_comparison")
 
 
 def plot_vessel_gap():
     """Side-by-side bar chart: large vs communicating DSC per model."""
     models = ["Dice+CE", "+clDice", "+Skeleton"]
-    large = [0.823, 0.797, 0.798]
-    comm =  [0.472, 0.435, 0.466]
-    gap =   [0.351, 0.363, 0.332]
+    large = [0.795, 0.797, 0.798]
+    comm =  [0.433, 0.435, 0.466]
+    gap =   [0.363, 0.363, 0.332]
 
     fig, ax = plt.subplots(figsize=(3.5, 2.0))
     x = np.arange(len(models))
@@ -225,22 +217,20 @@ def plot_vessel_gap():
     ax.legend(fontsize=7)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, "vessel_gap.pdf"))
-    plt.close()
-    print("Saved vessel_gap.pdf")
+    save_fig(fig, "vessel_gap")
 
 
 def plot_per_case_boxplot():
     """Box plot of per-case DSC for baseline model."""
     per_case_dsc = [
-        0.880, 0.883, 0.856, 0.914, 0.860, 0.871, 0.901, 0.883,
-        0.666, 0.822, 0.876, 0.935, 0.838, 0.916, 0.853, 0.826,
-        0.876, 0.913, 0.855, 0.888, 0.878, 0.929, 0.842, 0.925, 0.899
+        0.826, 0.884, 0.826, 0.911, 0.807, 0.853, 0.878, 0.728,
+        0.663, 0.906, 0.886, 0.925, 0.857, 0.924, 0.857, 0.852,
+        0.908, 0.911, 0.802, 0.867, 0.834, 0.905, 0.819, 0.911, 0.898
     ]
     per_case_cldice = [
-        0.888, 0.937, 0.926, 0.926, 0.914, 0.916, 0.960, 0.917,
-        0.899, 0.759, 0.924, 0.950, 0.931, 0.950, 0.926, 0.931,
-        0.973, 0.944, 0.927, 0.960, 0.891, 0.958, 0.880, 0.920, 0.916
+        0.836, 0.909, 0.908, 0.934, 0.837, 0.917, 0.937, 0.856,
+        0.865, 0.921, 0.942, 0.952, 0.925, 0.934, 0.915, 0.913,
+        0.975, 0.930, 0.868, 0.918, 0.849, 0.937, 0.846, 0.908, 0.943
     ]
 
     fig, ax = plt.subplots(figsize=(3.5, 2.0))
@@ -260,33 +250,42 @@ def plot_per_case_boxplot():
     ax.set_ylim(0.5, 1.05)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTDIR, "per_case_boxplot.pdf"))
-    plt.close()
-    print("Saved per_case_boxplot.pdf")
+    save_fig(fig, "per_case_boxplot")
 
 
 def main():
+    runs_dir = os.path.join(os.path.dirname(__file__), "..", "runs")
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_dir", type=str,
-                        default=os.path.join(os.path.dirname(__file__),
-                                             "..", "..", "..",
-                                             "dice_ce_20260331_222218"),
+                        default=os.path.join(runs_dir, "dice_ce_20260409_001230"),
                         help="Path to dice_ce baseline training log directory")
-    parser.add_argument("--cldice_log_dir", type=str, default=None,
-                        help="Path to dice_ce_cldice training log directory (optional)")
-    parser.add_argument("--skeleton_log_dir", type=str, default=None,
-                        help="Path to dice_ce_skeleton training log directory (optional)")
+    parser.add_argument("--cldice_log_dir", type=str,
+                        default=os.path.join(runs_dir, "dice_ce_cldice_20260404_053853"),
+                        help="Path to dice_ce_cldice training log directory")
+    parser.add_argument("--skeleton_log_dir", type=str,
+                        default=os.path.join(runs_dir, "dice_ce_skeleton_20260402_203733"),
+                        help="Path to dice_ce_skeleton training log directory")
     args = parser.parse_args()
 
-    # 1. Learning curves from baseline
-    log_path = os.path.join(args.log_dir, "training_log.json")
-    if os.path.exists(log_path):
-        log = load_log(log_path)
-        plot_learning_curves(log, label="Dice+CE")
-    else:
-        print(f"WARNING: Baseline training log not found at {log_path}")
-        print("  Skipping learning curve plot.")
-        print("  To generate, copy training_log.json from EC2 or specify --log_dir")
+    # 1. Overlaid learning curves for all three models
+    log_paths = [
+        (args.log_dir, "Dice+CE", "C0"),
+        (args.cldice_log_dir, "+clDice", "C1"),
+        (args.skeleton_log_dir, "+Skeleton", "C2"),
+    ]
+    logs, labels, colors = [], [], []
+    for path, label, color in log_paths:
+        lp = os.path.join(path, "training_log.json")
+        if os.path.exists(lp):
+            logs.append(load_log(lp))
+            labels.append(label)
+            colors.append(color)
+            print(f"Loaded {label}: {lp}")
+        else:
+            print(f"WARNING: {label} log not found at {lp}, skipping")
+
+    if logs:
+        plot_learning_curves_overlay(logs, labels, colors)
 
     # 2-6. Static charts from documented results
     plot_global_comparison()
@@ -296,8 +295,6 @@ def main():
     plot_per_case_boxplot()
 
     print(f"\nAll figures saved to: {OUTDIR}/")
-    print("\nTo include in LaTeX, ensure the figures/ directory is accessible")
-    print("from your .tex file location.")
 
 
 if __name__ == "__main__":

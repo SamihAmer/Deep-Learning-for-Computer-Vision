@@ -28,7 +28,7 @@ Johns Hopkins University\\
 
 % ============================================================================
 \begin{abstract}
-Accurate segmentation of cerebral vasculature from computed tomography angiography (CTA) is essential for surgical planning of stroke and intracranial aneurysms, yet standard training objectives such as Dice and cross-entropy produce segmentations with topological failures---severed vessels that render them clinically unusable despite high aggregate scores. We present a controlled ablation study isolating the impact of topology-aware loss functions on cerebral CTA vessel segmentation. A 3D U-Net is trained from scratch on the TopCoW 2024 dataset (125 CTA volumes, 13 Circle of Willis classes) under three loss configurations: (1)~Dice+CE baseline, (2)~Dice+CE+soft-clDice, and (3)~Dice+CE+Skeleton Recall. All architectural and hyperparameter choices are held identical. On the 13-class TopCoW benchmark, the baseline achieves the highest DSC (0.896) and clDice (0.940), while Skeleton Recall yields the lowest HD95 (2.82\,mm). Fine-tuning on TopBrain 2025 data (40 vessel classes including distal branches, posterior fossa vessels, and venous sinuses) dramatically expands vessel coverage for all models. Among the fine-tuned models, Skeleton Recall further outperforms both alternatives on the thinnest structures: 0.589 DSC on small arteries versus near-zero for the others. We provide stratified per-vessel-class analysis, large-versus-small vessel gap quantification, and computational cost profiling across all configurations.
+Accurate segmentation of cerebral vasculature from computed tomography angiography (CTA) is essential for surgical planning of stroke and intracranial aneurysms, yet standard training objectives such as Dice and cross-entropy produce segmentations with topological failures---severed vessels that render them clinically unusable despite high aggregate scores. We present a controlled ablation study isolating the impact of topology-aware loss functions on cerebral CTA vessel segmentation. A 3D U-Net is trained from scratch on the TopCoW 2024 dataset (125 CTA volumes, 13 Circle of Willis classes) under three loss configurations: (1)~Dice+CE baseline, (2)~Dice+CE+soft-clDice, and (3)~Dice+CE+Skeleton Recall---with identical architecture, hyperparameters, and hardware (8$\times$ A100 GPUs). The clDice model achieves the best aggregate metrics (DSC~0.864, clDice~0.916, lowest Betti-0 error), while Skeleton Recall yields the highest communicating artery DSC (0.466 vs.\ 0.433 baseline) and the smallest large-versus-small vessel gap. Fine-tuning on TopBrain 2025 data (40 vessel classes) dramatically expands vessel coverage for all models; among them, Skeleton Recall further outperforms on the thinnest structures: 0.589 DSC on small arteries versus zero for the others. Our hypothesis---that topology-aware losses disproportionately improve thin communicating artery segmentation---is partially supported: Skeleton Recall provides a modest but consistent improvement on communicating arteries and a dramatic advantage on the smallest vessels after transfer learning.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -46,14 +46,14 @@ To address this, several topology-preserving loss functions have been proposed. 
 
 Other related approaches include the Centerline Boundary Dice Loss~\cite{shi2024cbd}, which jointly optimizes centerline and boundary agreement, the Centerline-Cross Entropy loss~\cite{acebes2024}, and topologically faithful multi-class segmentation methods based on persistent homology~\cite{berger2024, stucki2023}. Specialized architectures like NexToU~\cite{shi2023nextou} and topology-aware cascaded U-Nets~\cite{rouge2024} have also been proposed, though these confound architectural and loss function contributions.
 
-A key limitation of existing evaluations is that topology-aware losses are typically either introduced alongside architectural changes or evaluated only through aggregate scores on multi-team challenge leaderboards, making it difficult to isolate the effect of the loss function itself. Our work addresses this gap through a controlled ablation: we hold architecture, preprocessing, augmentation, and all hyperparameters identical, training only with different loss functions.
+A key limitation of existing evaluations is that topology-aware losses are typically either introduced alongside architectural changes or evaluated only through aggregate scores on multi-team challenge leaderboards, making it difficult to isolate the effect of the loss function itself. Our work addresses this gap through a controlled ablation: we hold architecture, preprocessing, augmentation, hardware, and all hyperparameters identical, varying only the loss function.
 
-We make the following contributions:
+We hypothesize that topology-aware losses disproportionately improve segmentation of the thin communicating arteries (Acom, Pcom) that are most clinically significant for aneurysm and collateral flow assessment yet most prone to topological failure. We test this through:
 \begin{enumerate}
-    \item A controlled three-way comparison of Dice+CE, Dice+CE+clDice, and Dice+CE+Skeleton Recall on volumetric CTA data using identical 3D U-Net architecture and training pipeline.
+    \item A controlled three-way comparison of Dice+CE, Dice+CE+clDice, and Dice+CE+Skeleton Recall on identical hardware (8$\times$ A100 GPUs) with identical 3D U-Net architecture and training pipeline.
     \item Stratified per-vessel-class evaluation across 13 CoW arteries grouped into large named arteries and small communicating segments, quantifying the large-versus-small vessel gap.
-    \item Extended evaluation via fine-tuning on TopBrain 2025 (40 vessel classes), revealing that Skeleton Recall loss dramatically improves segmentation of thin distal branches and small arteries.
-    \item Computational cost profiling of all three configurations on multi-GPU training infrastructure.
+    \item Extended evaluation via fine-tuning on TopBrain 2025 (40 vessel classes), testing whether topology-aware pretraining improves transfer to thin distal branches and small arteries.
+    \item Computational cost profiling of all three configurations.
 \end{enumerate}
 
 % ============================================================================
@@ -124,7 +124,7 @@ CTA volumes are clipped to the Hounsfield Unit (HU) window $[0, 600]$ and normal
 
 \subsection{Training Procedure}
 
-All models are trained for 300 epochs with AdamW optimizer ($\text{LR}=10^{-3}$, weight decay $10^{-5}$), cosine annealing schedule with 10-epoch linear warmup (LR: $10^{-7} \rightarrow 10^{-3} \rightarrow 10^{-7}$), batch size 4, and mixed-precision training (AMP). Validation is performed every 25 epochs with early stopping patience of 5 validation cycles. The baseline model was trained on a single NVIDIA A10G (24\,GB) GPU, while the topology-aware variants used distributed data-parallel (DDP) training across 8$\times$ NVIDIA A100-SXM4-40GB GPUs on an AWS p4d.24xlarge instance.
+All three models are trained for 300 epochs on 8$\times$ NVIDIA A100-SXM4-40GB GPUs using distributed data-parallel (DDP) on an AWS p4d.24xlarge instance. We use AdamW optimizer ($\text{LR}=10^{-3}$, weight decay $10^{-5}$), cosine annealing schedule with 10-epoch linear warmup (LR: $10^{-7} \rightarrow 10^{-3} \rightarrow 10^{-7}$), batch size 4 per GPU, and mixed-precision training (AMP). Validation is performed every 25 epochs with early stopping patience of 5 validation cycles. All training configuration is identical across the three runs to ensure a controlled comparison.
 
 For TopBrain fine-tuning, we load the best from-scratch checkpoint (weights only, fresh optimizer) and train for 150 additional epochs with reduced learning rate ($10^{-4}$), 5-epoch warmup, and the same loss configuration used during from-scratch training.
 
@@ -133,29 +133,29 @@ For TopBrain fine-tuning, we load the best from-scratch checkpoint (weights only
 
 \subsection{Training Dynamics}
 
-Fig.~\ref{fig:learning_curves} shows the training loss and validation Dice progression for the baseline Dice+CE model over 300 epochs. Training loss decreases from 0.96 at epoch~1 to 0.12 by epoch~300, while training Dice rises from 0.30 to 0.87. The cosine annealing schedule with warmup produces stable convergence with no NaN batches. Validation Dice reaches 0.846 by epoch~25 and plateaus near 0.870 after epoch~200, with the best checkpoint at epoch~275 (DSC~0.896 on full evaluation). Peak GPU VRAM usage is 10.1\,GB with AMP enabled.
+Fig.~\ref{fig:learning_curves} shows the training loss and validation Dice progression for all three models over 300 epochs. All models converge to similar final training loss ($\sim$0.10--0.13) and training Dice ($\sim$0.85--0.87). The Dice+CE and clDice models exhibit nearly identical loss curves, while the Skeleton Recall model shows slightly higher training loss throughout, consistent with the additional skeleton recall penalty on centerline voxels. Validation Dice plateaus after epoch~200 for all models, with clDice achieving the highest validation Dice (0.864) and Dice+CE closely behind (0.858). The cosine annealing schedule with warmup produces stable convergence across all configurations with no NaN batches.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{figures/learning_curves.pdf}
-    \caption{Training dynamics for the Dice+CE baseline over 300 epochs. \textbf{Top:} Training loss (left axis) and learning rate (right axis). \textbf{Bottom:} Training Dice (per-epoch) and validation Dice (every 25 epochs).}
+    \caption{Training dynamics for all three loss configurations over 300 epochs on 8$\times$ A100 GPUs. \textbf{Top:} Smoothed training loss. \textbf{Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs). clDice and Dice+CE converge similarly; Skeleton Recall trains at slightly higher loss.}
     \label{fig:learning_curves}
 \end{figure}
 
 \subsection{Global Metric Comparison}
 
-Table~\ref{tab:global} presents the global evaluation metrics for all three from-scratch models on the TopCoW validation set (25 CTA cases). The Dice+CE baseline achieves the highest DSC (0.896) and clDice (0.940), suggesting that on the 13-class TopCoW benchmark---dominated by large, well-defined arteries---the additional topology loss terms do not provide aggregate improvements. However, the Skeleton Recall model achieves the lowest HD95 (2.82\,mm), indicating tighter surface agreement despite lower overlap scores.
+Table~\ref{tab:global} presents the global evaluation metrics for all three from-scratch models on the TopCoW validation set (25 CTA cases), all trained on identical hardware (8$\times$ A100). The clDice model achieves the highest DSC (0.864) and clDice (0.916), demonstrating that the topology-aware centerline loss provides a measurable improvement in both overlap and topological agreement. It also achieves the lowest Betti-0 error (3.72), indicating fewer connected component mismatches. The Skeleton Recall model trades aggregate overlap for tighter surface agreement (HD95 comparable to clDice at 2.82\,mm) but suffers from significantly higher Betti-0 error (26.84), suggesting over-fragmentation.
 
 \begin{table}[t]
 \centering
-\caption{Global Evaluation Metrics on TopCoW Validation Set}
+\caption{Global Evaluation Metrics on TopCoW Validation Set (all models trained on 8$\times$ A100)}
 \label{tab:global}
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Model} & \textbf{DSC} & \textbf{clDice} & \textbf{HD95 (mm)} & \textbf{B0 err} \\
 \midrule
-Dice+CE          & \textbf{0.896} & \textbf{0.940} & 1.36 & \textbf{2.76} \\
-Dice+CE+clDice   & 0.864 & 0.916 & \textbf{2.40} & 3.72 \\
+Dice+CE          & 0.858 & 0.907 & 2.48 & 5.76 \\
+Dice+CE+clDice   & \textbf{0.864} & \textbf{0.916} & \textbf{2.40} & \textbf{3.72} \\
 Dice+CE+Skeleton & 0.845 & 0.838 & 2.82 & 26.84 \\
 \bottomrule
 \end{tabular}
@@ -163,53 +163,54 @@ Dice+CE+Skeleton & 0.845 & 0.838 & 2.82 & 26.84 \\
 
 \subsection{Stratified Per-Vessel Analysis}
 
-Table~\ref{tab:stratified} shows the baseline model's per-vessel-class evaluation, revealing a dramatic performance gap between large and small vessels. Large arteries (BA, ICA, MCA, PCA) achieve DSC above 0.81, while communicating arteries---the thin segments most critical for collateral flow assessment---fall to 0.42--0.73 DSC (R-Pcom: 0.417, R-ACA: 0.490, L-ACA: 0.462). This 13.5-point gap (Table~\ref{tab:gap}) persists across all three loss configurations.
+Table~\ref{tab:stratified} shows per-vessel-class evaluation for all three models on the 13 TopCoW classes. Large arteries (BA, ICA, MCA, PCA) achieve DSC 0.77--0.85 across all models, while communicating arteries---the thin segments most critical for collateral flow assessment---fall to 0.40--0.51 DSC. Skeleton Recall achieves the highest Pcom scores (R-Pcom: 0.511, L-Pcom: 0.479) compared to the baseline (0.459, 0.410), representing a 5--7 point improvement on the thinnest communicating arteries.
 
 \begin{table}[t]
 \centering
-\caption{Stratified Per-Vessel DSC and clDice (Dice+CE Baseline)}
+\caption{Per-Vessel DSC: Baseline vs.\ Topology-Aware Models}
 \label{tab:stratified}
-\begin{tabular}{lcccr}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Vessel} & \textbf{DSC} & \textbf{clDice} & \textbf{B0 err} & \textbf{N} \\
+\textbf{Vessel} & \textbf{D+CE} & \textbf{+clDice} & \textbf{+Skel.} & \textbf{N} \\
 \midrule
-BA      & 0.821 & 0.860 & 0.4 & 25 \\
-R-PCA   & 0.815 & 0.918 & 0.6 & 25 \\
-L-PCA   & 0.812 & 0.909 & 1.3 & 25 \\
-R-ICA   & 0.858 & 0.898 & 0.2 & 25 \\
-L-ICA   & 0.814 & 0.916 & 0.0 & 25 \\
-R-MCA   & 0.851 & 0.901 & 0.5 & 25 \\
-L-MCA   & 0.813 & 0.913 & 0.0 & 25 \\
+BA      & 0.793 & 0.789 & \textbf{0.824} & 25 \\
+R-PCA   & 0.802 & \textbf{0.810} & 0.806 & 25 \\
+L-PCA   & 0.770 & \textbf{0.809} & 0.793 & 25 \\
+R-ICA   & 0.846 & \textbf{0.852} & 0.838 & 25 \\
+L-ICA   & \textbf{0.855} & 0.853 & 0.844 & 25 \\
+R-MCA   & 0.807 & 0.789 & \textbf{0.806} & 25 \\
+L-MCA   & 0.819 & 0.804 & \textbf{0.805} & 25 \\
+R-ACA   & 0.725 & \textbf{0.728} & 0.726 & 25 \\
+L-ACA   & 0.740 & \textbf{0.741} & \textbf{0.741} & 25 \\
 \midrule
-Acom    & 0.740 & 0.840 & 2.3 & 25 \\
-L-Pcom  & 0.729 & 0.804 & 1.9 & 25 \\
-R-ACA   & 0.490 & 0.712 & 0.5 & 15 \\
-L-ACA   & 0.462 & 0.703 & 1.1 & 15 \\
-R-Pcom  & 0.417 & 0.527 & 0.1 & 21 \\
+Acom    & 0.413 & 0.412 & \textbf{0.415} & 21 \\
+R-Pcom  & 0.459 & 0.479 & \textbf{0.511} & 15 \\
+L-Pcom  & 0.410 & 0.398 & \textbf{0.479} & 15 \\
+3rd-A2  & \textbf{0.622} & 0.613 & 0.583 & 2 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+Table~\ref{tab:gap} quantifies the large-versus-communicating vessel gap. Skeleton Recall achieves the best communicating artery DSC (0.466) and the smallest gap (0.332), partially supporting our hypothesis that topology-aware losses disproportionately benefit thin vessel segmentation. The clDice model matches the baseline on communicating arteries (0.435 vs.\ 0.433) but achieves its advantage through improved large vessel metrics.
+
 \begin{table}[t]
 \centering
-\caption{Large vs.\ Communicating Vessel Gap (From-Scratch Models)}
+\caption{Large vs.\ Communicating Vessel Gap (From-Scratch, 8$\times$ A100)}
 \label{tab:gap}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \toprule
 \textbf{Model} & \textbf{Large DSC} & \textbf{Comm.\ DSC} & \textbf{$\Delta$ DSC} \\
 \midrule
-Dice+CE          & 0.823 & 0.472 & 0.351 \\
-Dice+CE+clDice   & 0.797 & 0.435 & 0.363 \\
-Dice+CE+Skeleton & 0.798 & 0.466 & \textbf{0.332} \\
+Dice+CE          & 0.795 & 0.433 & 0.363 \\
+Dice+CE+clDice   & \textbf{0.797} & 0.435 & 0.363 \\
+Dice+CE+Skeleton & 0.798 & \textbf{0.466} & \textbf{0.332} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Notably, the Skeleton Recall model achieves the smallest large-small gap (0.332), suggesting that while its absolute scores are lower, the topology-aware focusing mechanism distributes optimization effort more evenly across vessel scales.
-
 \subsection{TopBrain Fine-Tuning: Comprehensive Vessel Coverage}
 
-The most revealing results emerge from TopBrain fine-tuning (Table~\ref{tab:topbrain}). Fine-tuning on TopBrain's 40-class labels is the primary driver of comprehensive vessel coverage: all three models gain the ability to segment distal branches, posterior fossa vessels, and venous sinuses that are entirely absent from the 13-class TopCoW annotations. However, among the three fine-tuned models, the choice of loss function during from-scratch pretraining still matters---particularly for the thinnest structures:
+Fine-tuning on TopBrain's 40-class labels is the primary driver of comprehensive vessel coverage: all three models gain the ability to segment distal branches, posterior fossa vessels, and venous sinuses that are entirely absent from the 13-class TopCoW annotations. However, the loss function used during from-scratch pretraining has a striking downstream effect on the thinnest structures (Table~\ref{tab:topbrain}):
 
 \begin{table}[t]
 \centering
@@ -219,41 +220,41 @@ The most revealing results emerge from TopBrain fine-tuning (Table~\ref{tab:topb
 \toprule
 \textbf{Vessel Group} & \textbf{D+CE} & \textbf{+clDice} & \textbf{+Skeleton} \\
 \midrule
-Large CoW arteries    & \textbf{0.834} & 0.829 & 0.821 \\
-Communicating         & 0.491 & 0.490 & \textbf{0.513} \\
-Distal branches       & 0.694 & 0.712 & \textbf{0.752} \\
-Posterior fossa       & 0.570 & 0.533 & \textbf{0.626} \\
-Small arteries        & 0.005 & 0.000 & \textbf{0.589} \\
-Venous sinuses        & 0.468 & 0.463 & \textbf{0.613} \\
+Large CoW arteries    & \textbf{0.832} & 0.829 & 0.821 \\
+Communicating         & 0.466 & 0.490 & \textbf{0.513} \\
+Distal branches       & 0.687 & 0.712 & \textbf{0.752} \\
+Posterior fossa       & 0.565 & 0.533 & \textbf{0.626} \\
+Small arteries        & 0.000 & 0.000 & \textbf{0.589} \\
+Venous sinuses        & 0.416 & 0.463 & \textbf{0.613} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
-    \item \textbf{Small arteries} (ophthalmic, anterior choroidal): Skeleton Recall achieves 0.589 DSC versus near-zero for both alternatives. This represents a qualitative, not merely quantitative, difference---the Skeleton Recall model \emph{finds} these vessels while the others do not.
-    \item \textbf{Posterior fossa} (vertebral, SCA, AICA, PICA): 0.626 vs.\ 0.570 (Dice+CE) and 0.533 (clDice).
-    \item \textbf{Venous sinuses}: 0.613 vs.\ 0.468/0.463.
+    \item \textbf{Small arteries} (ophthalmic, anterior choroidal): Skeleton Recall achieves 0.589 DSC versus zero for both alternatives. The Skeleton Recall model \emph{finds} these vessels while the others do not---a qualitative, not merely quantitative, difference.
+    \item \textbf{Posterior fossa} (vertebral, SCA, AICA, PICA): 0.626 vs.\ 0.565 (Dice+CE) and 0.533 (clDice).
+    \item \textbf{Venous sinuses}: 0.613 vs.\ 0.416 (Dice+CE) and 0.463 (clDice).
     \item \textbf{Large CoW arteries}: All models perform comparably ($\sim$0.82--0.83), confirming that topology losses do not harm large vessel segmentation.
 \end{itemize}
 
 \subsection{Computational Cost}
 
-Table~\ref{tab:compute} summarizes training costs. The baseline Dice+CE trains in approximately 6.5 hours on a single A10G GPU. On 8$\times$ A100 GPUs with DDP, the topology-aware models train in 45--68 minutes (300 epochs). The Skeleton Recall loss adds minimal overhead compared to clDice, which requires 10 iterations of 3D morphological operations on GPU per forward pass. TopBrain fine-tuning requires only $\sim$8 minutes additional per model.
+Table~\ref{tab:compute} summarizes training costs. All from-scratch models train in 45--68 minutes for 300 epochs on 8$\times$ A100 GPUs with DDP. The Skeleton Recall loss adds modest overhead ($\sim$13\%) compared to baseline due to CPU-side skeletonization. The clDice loss, despite GPU-intensive iterative morphological operations, trains slightly faster than Skeleton Recall. TopBrain fine-tuning requires only $\sim$8 minutes additional per model.
 
 \begin{table}[t]
 \centering
-\caption{Computational Cost Comparison}
+\caption{Computational Cost Comparison (all on 8$\times$ A100)}
 \label{tab:compute}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Model} & \textbf{GPUs} & \textbf{Time} & \textbf{Epochs} & \textbf{VRAM} \\
+\textbf{Model} & \textbf{Time} & \textbf{Epochs} & \textbf{Best epoch} \\
 \midrule
-Dice+CE          & 1$\times$A10G  & $\sim$6.5\,h & 300 & 10.1\,GB \\
-Dice+CE+clDice   & 8$\times$A100  & $\sim$60\,min & 300 & -- \\
-Dice+CE+Skeleton & 8$\times$A100  & $\sim$68\,min & 300 & -- \\
+Dice+CE          & $\sim$60\,min & 300 & 300 \\
+Dice+CE+clDice   & $\sim$60\,min & 300 & 250 \\
+Dice+CE+Skeleton & $\sim$68\,min & 300 & 275 \\
 \midrule
-\multicolumn{5}{l}{\textit{Fine-tuning (all models)}} \\
-TopBrain FT      & 8$\times$A100  & $\sim$8\,min & 150 & -- \\
+\multicolumn{4}{l}{\textit{Fine-tuning (all models)}} \\
+TopBrain FT      & $\sim$8\,min & 150 & 150 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -261,20 +262,20 @@ TopBrain FT      & 8$\times$A100  & $\sim$8\,min & 150 & -- \\
 % ============================================================================
 \section{Discussion}
 
-Our results present a nuanced picture of topology-aware loss functions. On the standard 13-class TopCoW benchmark, the baseline Dice+CE achieves the highest aggregate metrics. This is consistent with the observation by Isensee et al.~\cite{isensee2024} that simple, well-tuned baselines remain competitive under controlled comparison. The 13 TopCoW classes are dominated by large, well-defined arteries where overlap-based metrics are reliable indicators of segmentation quality.
+Our results present a nuanced picture of topology-aware loss functions for cerebral vessel segmentation. The central hypothesis---that topology-aware losses disproportionately improve thin communicating artery segmentation---is partially supported, with the effect size varying by vessel scale.
 
-However, the picture changes dramatically when all three models are fine-tuned on TopBrain's 40-class labels. TopBrain fine-tuning itself is the primary driver of expanded vessel coverage---all three models gain the ability to segment distal branches, posterior fossa vessels, and venous sinuses absent from TopCoW. Yet the loss function used during from-scratch pretraining still has a measurable downstream effect: the Skeleton Recall model achieves 0.589 DSC on small arteries (ophthalmic, anterior choroidal) where both alternatives score near zero, even after identical TopBrain fine-tuning. We hypothesize that the centerline-focused gradient signal during from-scratch training shapes the network's feature hierarchy to better encode tubular geometry at fine scales, creating representations that transfer more effectively to thin structures.
+On the 13-class TopCoW benchmark, the clDice model achieves the best overall performance (DSC 0.864, Betti-0 error 3.72), demonstrating that differentiable centerline matching provides genuine aggregate improvement over the Dice+CE baseline. The Skeleton Recall model, while achieving lower aggregate metrics, shows a targeted improvement on the thinnest communicating arteries: R-Pcom DSC improves from 0.459 (baseline) to 0.511, and L-Pcom from 0.410 to 0.479. This pattern---reduced large-vessel performance traded for improved thin-vessel detection---is consistent with the Skeleton Recall loss's design, which focuses gradient signal on centerline voxels at the expense of boundary precision.
 
-The clDice model's underperformance relative to the baseline may be partly attributed to the computational complexity of differentiable 3D soft-skeletonization. The 10-iteration morphological opening on $128^3$ patches introduces noisy gradient estimates, particularly for very thin structures where the soft skeleton degenerates. Skeleton Recall's approach of precomputing hard skeletons on CPU and using them as deterministic attention masks appears more robust.
+The most striking results emerge from TopBrain fine-tuning, where the loss function used during from-scratch pretraining has a dramatic downstream effect. The Skeleton Recall model achieves 0.589 DSC on small arteries (ophthalmic, anterior choroidal) where both alternatives score zero, even after identical TopBrain fine-tuning. This suggests that Skeleton Recall's centerline-focused gradient signal during pretraining shapes the network's feature hierarchy to better encode thin tubular geometry---a representational advantage that transfers when the model is exposed to richer annotations. The clDice model shows a smaller but consistent advantage over the baseline on distal branches (0.712 vs.\ 0.687) and venous sinuses (0.463 vs.\ 0.416).
 
-A notable limitation is the confounding of hardware between the baseline (single GPU) and topology-aware models (8-GPU DDP). While learning rates were not scaled with world size and batch sizes per GPU remained identical, the effective batch size of 32 (4$\times$8 GPUs) versus 4 may influence convergence dynamics. The baseline's extended single-GPU training session (6.5 hours vs.\ $\sim$1 hour for DDP) also provided more wall-clock time for gradient updates, potentially benefiting its optimization.
+The Skeleton Recall model's high Betti-0 error (26.84 vs.\ 3.72 for clDice) on the from-scratch benchmark deserves attention. While Skeleton Recall improves centerline recall, it appears to over-segment, producing fragmented predictions with many small disconnected components. This trade-off between topological recall (finding vessels) and topological precision (avoiding fragments) suggests that combining Skeleton Recall with a connected-component penalty could yield further improvements.
 
-The large-small vessel gap ($>$0.33 DSC across all models) highlights a fundamental challenge in cerebrovascular segmentation: the communicating arteries that are most clinically significant for aneurysm assessment and collateral flow evaluation are also the hardest to segment. Addressing this gap---through class-balanced sampling, vessel-diameter-aware loss weighting, or targeted augmentation of thin structures---remains an important direction for future work.
+The large-small vessel gap ($>$0.33 DSC across all models) highlights a fundamental challenge in cerebrovascular segmentation: the communicating arteries most clinically significant for aneurysm assessment are also the hardest to segment. Addressing this gap through class-balanced sampling, vessel-diameter-aware loss weighting, or targeted augmentation of thin structures remains an important direction for future work.
 
 % ============================================================================
 \section{Conclusion}
 
-We presented a controlled ablation study comparing three loss configurations for cerebral CTA vessel segmentation. While the Dice+CE baseline achieves the best aggregate metrics on the 13-class TopCoW benchmark, fine-tuning on TopBrain's richer 40-class annotations dramatically expands vessel coverage for all models. Among the fine-tuned models, the Skeleton Recall loss yields the best performance on the thinnest structures, achieving 0.589 DSC on small arteries where both alternatives score near zero. This suggests that topology-aware pretraining creates learned representations that transfer more effectively to thin tubular structures. The large-versus-small vessel gap of $>$0.33 DSC across all configurations highlights the ongoing challenge of communicating artery segmentation. Future work will explore wider HU windows to reduce false positives on bone, class-balanced sampling strategies, and retraining on corrected labels from our model-assisted annotation pipeline.
+We presented a controlled ablation study comparing three loss configurations for cerebral CTA vessel segmentation on identical hardware. The clDice model achieves the best aggregate metrics on the 13-class TopCoW benchmark, while Skeleton Recall provides targeted improvement on thin communicating arteries (+3--7 points DSC on Pcom). Fine-tuning on TopBrain's 40-class annotations dramatically expands vessel coverage for all models; among them, Skeleton Recall yields the best performance on the thinnest structures (0.589 DSC on small arteries vs.\ zero for alternatives), suggesting that topology-aware pretraining creates representations that transfer more effectively to thin tubular structures. Our hypothesis is partially supported: topology-aware losses do improve thin vessel segmentation, but the effect on CoW-scale communicating arteries is modest compared to the dramatic benefit observed after transfer to truly small vessels. Future work will explore wider HU windows to reduce false positives on bone, class-balanced sampling strategies, and retraining on corrected labels from our model-assisted annotation pipeline.
 
 % ============================================================================
 \bibliographystyle{IEEEtran}

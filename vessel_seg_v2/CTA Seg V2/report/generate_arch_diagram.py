@@ -107,5 +107,6 @@ ax.legend(handles=legend_elements, loc="lower left", fontsize=5.5,
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTDIR, "unet3d_architecture.pdf"))
+plt.savefig(os.path.join(OUTDIR, "unet3d_architecture.png"))
 plt.close()
-print("Saved unet3d_architecture.pdf")
+print("Saved unet3d_architecture.pdf + .png")
