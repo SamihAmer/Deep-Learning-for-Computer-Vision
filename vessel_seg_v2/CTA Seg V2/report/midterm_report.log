@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  8 APR 2026 18:59
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  11 APR 2026 11:50
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -615,37 +615,39 @@ File: figures/unet3d_architecture.pdf Graphic file (type pdf)
 Package pdftex.def Info: figures/unet3d_architecture.pdf  used on input line 79
 .
 (pdftex.def)             Requested size: 252.0pt x 180.00462pt.
-
-Overfull \hbox (41.9287pt too wide) detected at line 102
-[][][][]\OT1/cmr/m/n/10 (\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ) = [](\OML/cmm/m/it
-/10 x \OMS/cmsy/m/n/10 ^^@ []\OT1/cmr/m/n/10 (\OML/cmm/m/it/10 x\OT1/cmr/m/n/10
- )) + [] []([][](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ) \OMS/cmsy/m/n/10 ^^@ []\OT
-1/cmr/m/n/10 ([][](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 )))
- []
-
 [2 <./figures/unet3d_architecture.pdf>]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 1
-15.
+17.
 
 (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
-Underfull \hbox (badness 1867) in paragraph at lines 115--116
+Underfull \hbox (badness 1867) in paragraph at lines 117--118
  \OT1/ptm/m/it/10 3) Dice + CE + Skele-ton Re-call: [][][] \OT1/ptm/m/n/10 Fol-
 low-ing Kirch-
  []
 
 
-Underfull \hbox (badness 1389) in paragraph at lines 115--116
-\OT1/ptm/m/n/10 the ground truth on CPU us-ing mor-pho-log-i-cal thin-ning
+Underfull \hbox (badness 2293) in paragraph at lines 117--118
+\OT1/ptm/m/n/10 hoff et al. [[]5[]], we take a more com-pu-ta-tion-ally ef-fi-
  []
 
-<figures/learning_curves.pdf, id=200, 240.17354pt x 276.49391pt>
+
+Underfull \hbox (badness 5345) in paragraph at lines 117--118
+\OT1/ptm/m/n/10 on GPU, we pre-com-pute bi-nary ground truth skele-
+ []
+
+
+Underfull \hbox (badness 7326) in paragraph at lines 117--118
+\OT1/ptm/m/n/10 tons on CPU us-ing clas-si-cal mor-pho-log-i-cal thin-ning
+ []
+
+<figures/learning_curves.pdf, id=198, 240.17354pt x 276.49391pt>
 File: figures/learning_curves.pdf Graphic file (type pdf)
 <use figures/learning_curves.pdf>
-Package pdftex.def Info: figures/learning_curves.pdf  used on input line 140.
+Package pdftex.def Info: figures/learning_curves.pdf  used on input line 142.
 (pdftex.def)             Requested size: 252.0pt x 290.10777pt.
-[3 <./figures/learning_curves.pdf>] [4]
+[3] [4 <./figures/learning_curves.pdf>]
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -662,18 +664,14 @@ Before submitting the final camera ready copy, remember to:
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
  ***********
-
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
-
 Package rerunfilecheck Info: File `midterm_report.out' has not changed.
 (rerunfilecheck)             Checksum: 01CB39FDE9D251761527FFF8C7A96897;3289.
  ) 
 Here is how much of TeX's memory you used:
- 16781 strings out of 474486
- 333578 string characters out of 5743756
- 1954542 words of memory out of 5000000
- 38829 multiletter control sequences out of 15000+600000
+ 16783 strings out of 474486
+ 333638 string characters out of 5743756
+ 1951542 words of memory out of 5000000
+ 38831 multiletter control sequences out of 15000+600000
  598723 words of font info for 116 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  75i,11n,79p,1668b,1081s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -694,9 +692,9 @@ a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmbi
 8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr
 8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr
 i8a.pfb>
-Output written on midterm_report.pdf (5 pages, 267336 bytes).
+Output written on midterm_report.pdf (5 pages, 272451 bytes).
 PDF statistics:
- 351 PDF objects out of 1000 (max. 8388607)
+ 352 PDF objects out of 1000 (max. 8388607)
  60 named destinations out of 1000 (max. 500000)
  179 words of extra memory for PDF output out of 10000 (max. 10000000)
 

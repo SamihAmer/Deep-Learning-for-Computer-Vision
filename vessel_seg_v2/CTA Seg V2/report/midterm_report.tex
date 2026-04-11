@@ -7,7 +7,7 @@
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{multirow}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{subcaption}
 \usepackage{siunitx}
 
@@ -86,37 +86,39 @@ We adopt a 3D U-Net following the nnU-Net design philosophy~\cite{isensee2021, i
 All three configurations share the same deep supervision wrapper that applies the base loss at each decoder scale.
 
 \subsubsection{Dice + Cross-Entropy (Baseline)}
-The baseline loss combines soft Dice loss (computed per-class, excluding background) with standard cross-entropy:
+The baseline loss combines soft Dice loss with standard cross-entropy. For predicted class probabilities $p_{i,c} = \text{softmax}(z_i)_c$ and one-hot ground truth $g_{i,c}$, the cross-entropy loss is:
 \begin{equation}
-    \mathcal{L}_{\text{base}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{Dice}}
+    \mathcal{L}_{\text{CE}} = -\frac{1}{N}\sum_{i} \sum_{c} g_{i,c} \log p_{i,c}
 \end{equation}
-where
+where $N$ is the number of voxels and $c$ ranges over classes. The soft Dice loss is computed per foreground class:
 \begin{equation}
     \mathcal{L}_{\text{Dice}} = 1 - \frac{2\sum_i p_i g_i + \epsilon}{\sum_i p_i + \sum_i g_i + \epsilon}, \quad \epsilon = 10^{-5}.
 \end{equation}
+The combined baseline loss is $\mathcal{L}_{\text{base}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{Dice}}$. Dice handles region-level overlap while cross-entropy provides sharp per-voxel gradients. This is the nnU-Net default~\cite{isensee2024}; however, it treats all voxels equally---a voxel on the surface of the internal carotid artery receives the same gradient signal as a voxel at the center of a sub-millimeter communicating artery.
 
 \subsubsection{Dice + CE + Soft-clDice}
-Following Shit et al.~\cite{shit2021}, we add a differentiable centerline Dice term. Soft skeletons are computed via iterative morphological opening ($K=10$ iterations):
-\begin{equation}
-    \text{skel}(x) = \text{ReLU}(x - \text{open}(x)) + \sum_{k=1}^{K} \text{ReLU}(\text{erode}^k(x) - \text{open}(\text{erode}^k(x)))
-\end{equation}
-The topology precision and sensitivity are:
+Following Shit et al.~\cite{shit2021}, we add a differentiable centerline Dice term that computes Dice on morphological skeletons rather than full volumes. The key innovation is differentiable soft-skeletonization via iterative morphological operations. Erosion is implemented as 3D min-pooling (via max-pooling on the negated input) and dilation as 3D max-pooling, both with $3\times3\times3$ kernels. Morphological opening is erosion followed by dilation: $\text{open}(x) = \text{dilate}(\text{erode}(x))$. The soft skeleton is then extracted over $K=10$ iterations:
+\begin{multline}
+    \text{skel}(x) = \text{ReLU}\bigl(x - \text{open}(x)\bigr) \\
+    + \sum_{k=1}^{K} \text{ReLU}\bigl(\text{erode}^k(x) - \text{open}(\text{erode}^k(x))\bigr)
+\end{multline}
+Each iteration peels one layer from the foreground, accumulating the topological skeleton at each scale. From the soft skeletons, we compute topology precision (how much of the predicted skeleton lies within the ground truth) and topology sensitivity (how much of the ground truth skeleton is covered by the prediction):
 \begin{align}
     T_{\text{prec}} &= \frac{|\text{skel}(\hat{y}) \cdot y|}{|\text{skel}(\hat{y})|}, \quad
     T_{\text{sens}} = \frac{|\hat{y} \cdot \text{skel}(y)|}{|\text{skel}(y)|}
 \end{align}
-and the combined loss is:
+The clDice is the harmonic mean $\text{clDice} = 2 \cdot T_{\text{prec}} \cdot T_{\text{sens}} / (T_{\text{prec}} + T_{\text{sens}})$, and the combined loss is:
 \begin{equation}
     \mathcal{L}_{\text{clDice}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha(1 - \text{clDice})
 \end{equation}
 with $\alpha = 0.5$.
 
 \subsubsection{Dice + CE + Skeleton Recall}
-Following Kirchhoff et al.~\cite{kirchhoff2024}, we precompute 3D binary skeletons of the ground truth on CPU using morphological thinning (\texttt{skimage.morphology.skeletonize\_3d}) and compute skeleton recall as:
+Following Kirchhoff et al.~\cite{kirchhoff2024}, we take a more computationally efficient approach. Instead of differentiable soft-skeletonization on GPU, we precompute binary ground truth skeletons on CPU using classical morphological thinning (\texttt{skimage.morphology.skeletonize\_3d}), producing a deterministic one-voxel-wide centerline. The skeleton recall loss measures how much of this precomputed skeleton is covered by the predicted probabilities:
 \begin{equation}
     \mathcal{L}_{\text{skel}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha\left(1 - \frac{\sum \hat{y} \cdot \text{skel}(y)}{\sum \text{skel}(y)}\right)
 \end{equation}
-with $\alpha = 0.5$. This avoids the GPU-intensive iterative soft-skeletonization of clDice while still focusing optimization on centerline voxels.
+with $\alpha = 0.5$. Critically, this is a \emph{recall-only} metric on the skeleton: it penalizes the network for missing centerline voxels but does not penalize over-segmentation beyond the skeleton. Only the base Dice+CE term handles false positives. This design focuses all topology-aware gradient signal on ensuring the network finds every centerline voxel, even at the cost of producing extra predictions.
 
 \subsection{Preprocessing and Augmentation}
 
