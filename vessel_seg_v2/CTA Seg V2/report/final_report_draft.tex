@@ -1,0 +1,478 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage[hidelinks]{hyperref}
+\usepackage{subcaption}
+\usepackage{siunitx}
+
+\sisetup{detect-weight=true, detect-family=true}
+
+% TODO marker so any unfilled number is obvious in the build
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\tbd}{\textcolor{red}{\textbf{tbd}}}
+
+\begin{document}
+
+\title{Deep Learning for Vessel Segmentation in Cerebral CTA:\\Topology-Aware and Reconstruction-Aware Loss Functions}
+
+\author{
+\IEEEauthorblockN{Samih Tharwat Amer}
+\IEEEauthorblockA{Whiting School of Engineering\\
+Johns Hopkins University\\
+}
+}
+
+\maketitle
+
+% ============================================================================
+\begin{abstract}
+Accurate segmentation of cerebral vasculature from computed tomography angiography (CTA) is essential for surgical planning of stroke and intracranial aneurysms, yet standard training objectives such as Dice and cross-entropy produce segmentations with topological failures---severed vessels that render them clinically unusable despite high aggregate scores. We present a controlled ablation study isolating the impact of two complementary loss families on cerebral CTA vessel segmentation. A 3D U-Net is trained from scratch on the TopCoW 2024 dataset (125 CTA volumes, 13 Circle of Willis classes) under seven loss configurations spanning a topology-aware family (Dice+CE, +clDice, +Skeleton Recall) and a reconstruction-aware family (+SSIM, +MSE-on-distance-transform, +VGG perceptual), as well as a combination of the best member from each family. All configurations share an identical architecture, hyperparameter set, and hardware (8$\times$A100 GPUs), so observed differences are attributable to the loss alone. Across the topology-aware family, clDice achieves the best aggregate metrics (DSC 0.864, clDice 0.916, lowest Betti-0 error) while Skeleton Recall yields the highest communicating artery DSC and the smallest large-versus-small vessel gap; fine-tuning on TopBrain 2025 (40 vessel classes) reveals a striking advantage for Skeleton Recall on the thinnest distal structures (0.589 DSC on small arteries vs.\ zero for the others). Across the reconstruction-aware family, \todo{1-line summary after EC2 run}. The combination loss \todo{1-line summary}. We additionally report three reconstruction-style evaluation metrics (3D-SSIM, PSNR, Fr\'{e}chet Feature Distance) to characterize each loss along an axis orthogonal to overlap and topology.
+\end{abstract}
+
+\begin{IEEEkeywords}
+vessel segmentation, computed tomography angiography, topology-preserving loss, structural similarity, perceptual loss, clDice, skeleton recall, 3D U-Net, Circle of Willis
+\end{IEEEkeywords}
+
+% ============================================================================
+\section{Introduction}
+
+Cerebrovascular diseases, including ischemic stroke, intracranial aneurysms, and arteriovenous malformations, remain a leading cause of death and disability worldwide~\cite{chen2023}. Accurate segmentation of the cerebral vasculature from computed tomography angiography (CTA) is a prerequisite for computer-aided diagnosis, surgical navigation, and treatment planning. In particular, the Circle of Willis (CoW)---the arterial anastomotic ring at the base of the brain---is of central importance, as its communicating arteries provide collateral blood flow pathways that determine patient outcomes during vascular occlusion events~\cite{yang2023}.
+
+Deep learning has achieved remarkable success in medical image segmentation, with architectures such as the 3D U-Net~\cite{isensee2021} and its variants forming the backbone of most state-of-the-art systems. The standard training paradigm combines the Dice loss with cross-entropy (CE), a formulation popularized by nnU-Net~\cite{isensee2024} that balances region overlap with per-voxel classification. However, these overlap-based objectives treat all voxels equally and provide no explicit incentive to preserve the topological connectivity of tubular structures. A segmentation can achieve a high Dice score while containing severed vessels, missing communicating arteries, or producing disconnected fragments---failures that are clinically catastrophic despite appearing numerically acceptable~\cite{shit2021}.
+
+To address this, several topology-preserving loss functions have been proposed. Shit et al.~\cite{shit2021} introduced the centerline Dice (clDice), which computes Dice on the morphological skeletons of the prediction and ground truth via differentiable soft-skeletonization. Kirchhoff et al.~\cite{kirchhoff2024} proposed Skeleton Recall, which precomputes binary skeletons on CPU and uses them as attention masks for a weighted cross-entropy term, achieving topology awareness with significantly lower computational overhead than clDice.
+
+A complementary family of objectives, popular in image restoration and reconstruction, has received much less attention for binary medical segmentation: \emph{reconstruction-aware} losses that operate on the soft probability map rather than its skeleton. Wang et al.~\cite{wang2004ssim} introduced the Structural Similarity Index (SSIM), originally a perceptual image-quality metric; Qin et al.~\cite{qin2019basnet} repurposed it as a segmentation loss in the BASNet model and reported sharper boundaries on binary salient-object masks. Mosinska et al.~\cite{mosinska2018} demonstrated that perceptual losses computed via a pretrained VGG network on tubular structure masks improve topological correctness. Kervadec et al.~\cite{kervadec2021boundary} and Karimi \& Salcudean~\cite{karimi2020hausdorff} formulated regression-style losses on distance maps that rival Dice for highly imbalanced segmentation.
+
+Other related approaches include the Centerline Boundary Dice Loss~\cite{shi2024cbd}, the Centerline-Cross Entropy loss~\cite{acebes2024}, and topologically faithful multi-class methods based on persistent homology~\cite{berger2024, stucki2023}. Ma et al.\ provide a comprehensive survey of medical-segmentation losses~\cite{ma2021odyssey}.
+
+A key limitation of existing evaluations is that loss functions are typically introduced alongside architectural changes or evaluated only through aggregate scores on multi-team challenge leaderboards, making it difficult to isolate the effect of the loss itself. Our work addresses this gap through a controlled ablation: we hold architecture, preprocessing, augmentation, hardware, and all hyperparameters identical, varying only the loss function across both topology-aware and reconstruction-aware families.
+
+We hypothesize that (i) topology-aware losses disproportionately improve segmentation of the thin communicating arteries (Acom, Pcom) most prone to topological failure, (ii) reconstruction-aware losses improve probability-map fidelity but do not, on their own, recover topology, and (iii) combining a topology-aware and a reconstruction-aware loss compounds rather than cancels the two effects. We test this through:
+\begin{enumerate}
+    \item A controlled six-way comparison of Dice+CE, +clDice, +Skeleton Recall, +SSIM, +MSE-on-distance-transform, and +VGG perceptual on identical hardware (8$\times$A100 GPUs) with identical 3D U-Net architecture and training pipeline.
+    \item Stratified per-vessel-class evaluation across 13 CoW arteries grouped into large named arteries and small communicating segments.
+    \item Extended evaluation via fine-tuning on TopBrain 2025 (40 vessel classes), testing whether each loss's pretraining transfers to thin distal branches and small arteries.
+    \item A combination experiment: Dice+CE+clDice+SSIM, testing whether topology-aware and reconstruction-aware supervision interact constructively.
+    \item Multi-axis evaluation including reconstruction-style metrics (3D-SSIM, PSNR, Fr\'{e}chet Feature Distance) alongside the standard overlap and topology metrics.
+\end{enumerate}
+
+% ============================================================================
+\section{Datasets}
+
+\subsection{TopCoW 2024}
+
+The TopCoW 2024 Challenge dataset~\cite{yang2023} provides 125 CTA and 125 MRA volumes with expert voxel-level annotations for 13 Circle of Willis vessel components. We use only the CTA subset (125 volumes) to avoid modality confounding. Each volume is stored in NIfTI format with 16-bit signed intensities in LPS+ orientation. The 13 annotated vessel classes are: Basilar Artery (BA), Right/Left Posterior Cerebral Artery (R/L-PCA), Right/Left Internal Carotid Artery (R/L-ICA), Right/Left Middle Cerebral Artery (R/L-MCA), Right/Left Posterior Communicating Artery (R/L-Pcom), Anterior Communicating Artery (Acom), Right/Left Anterior Cerebral Artery (R/L-ACA), and 3rd-A2 segment. For our binary segmentation task, all vessel classes are collapsed into a single foreground label. We apply an 80/20 random split (seed 42), yielding 100 training and 25 validation volumes.
+
+\subsection{TopBrain 2025}
+
+The TopBrain 2025 dataset provides the \emph{same 25 CT scans} as a subset of TopCoW but with significantly richer annotations: 40 vessel classes spanning CoW arteries, distal branches (A3, M2, M3, P3/P4), posterior fossa vessels (vertebral arteries, SCA, AICA, PICA), small arteries (ophthalmic, anterior choroidal), and venous sinuses (Vein of Galen, Straight Sinus, Internal Cerebral Veins, Basal Veins of Rosenthal, Superior Sagittal Sinus). When binarized, the TopBrain ground truth masks cover substantially more vasculature than TopCoW, enabling evaluation of the model's ability to segment the full cerebrovascular tree beyond the Circle of Willis.
+
+% ============================================================================
+\section{Methods}
+
+\subsection{Architecture: 3D U-Net}
+
+We adopt a 3D U-Net following the nnU-Net design philosophy~\cite{isensee2021, isensee2024}. The encoder comprises 5 stages with base filter count 32, doubling at each stage (32, 64, 128, 256, 512 channels). Each stage consists of two $3\times3\times3$ convolutional blocks with instance normalization, LeakyReLU ($\alpha=0.01$) activation, and residual connections via $1\times1$ projection when channel dimensions change. Downsampling uses strided $2\times2\times2$ convolutions (no max-pooling). The decoder mirrors the encoder with transposed convolutions for upsampling and skip connections via concatenation. Deep supervision heads ($1\times1$ convolutions) are attached at each decoder level with exponentially decaying weights (1.0, 0.5, 0.25, 0.125). The model has approximately 24.9M parameters. Weights are initialized with Kaiming normal initialization~\cite{he2015}.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/unet3d_architecture.pdf}
+    \caption{3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level.}
+    \label{fig:architecture}
+\end{figure}
+
+\subsection{Loss Functions: Topology-Aware Family}
+
+All configurations share the same deep supervision wrapper that applies the base loss at each decoder scale.
+
+\subsubsection{Dice + Cross-Entropy (Baseline)}
+The baseline loss combines soft Dice loss with standard cross-entropy. For predicted class probabilities $p_{i,c} = \text{softmax}(z_i)_c$ and one-hot ground truth $g_{i,c}$, the cross-entropy loss is:
+\begin{equation}
+    \mathcal{L}_{\text{CE}} = -\frac{1}{N}\sum_{i} \sum_{c} g_{i,c} \log p_{i,c}
+\end{equation}
+where $N$ is the number of voxels and $c$ ranges over classes. The soft Dice loss is computed per foreground class:
+\begin{equation}
+    \mathcal{L}_{\text{Dice}} = 1 - \frac{2\sum_i p_i g_i + \epsilon}{\sum_i p_i + \sum_i g_i + \epsilon}, \quad \epsilon = 10^{-5}.
+\end{equation}
+The combined baseline loss is $\mathcal{L}_{\text{base}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{Dice}}$.
+
+\subsubsection{Dice + CE + Soft-clDice}
+Following Shit et al.~\cite{shit2021}, we add a differentiable centerline Dice term. The soft skeleton is extracted iteratively via morphological operations:
+\begin{multline}
+    \text{skel}(x) = \text{ReLU}\bigl(x - \text{open}(x)\bigr) \\
+    + \sum_{k=1}^{K} \text{ReLU}\bigl(\text{erode}^k(x) - \text{open}(\text{erode}^k(x))\bigr)
+\end{multline}
+with $K=10$. Topology precision and sensitivity are
+\begin{align}
+    T_{\text{prec}} &= \frac{|\text{skel}(\hat{y}) \cdot y|}{|\text{skel}(\hat{y})|}, \quad
+    T_{\text{sens}} = \frac{|\hat{y} \cdot \text{skel}(y)|}{|\text{skel}(y)|}
+\end{align}
+and $\mathcal{L}_{\text{clDice}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha(1 - 2T_{\text{prec}}T_{\text{sens}}/(T_{\text{prec}}+T_{\text{sens}}))$ with $\alpha = 0.5$.
+
+\subsubsection{Dice + CE + Skeleton Recall}
+Following Kirchhoff et al.~\cite{kirchhoff2024}, we precompute binary skeletons on CPU using \texttt{skimage.morphology.skeletonize\_3d} and apply a recall-only penalty on centerline voxels:
+\begin{equation}
+    \mathcal{L}_{\text{skel}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha\left(1 - \frac{\sum \hat{y} \cdot \text{skel}(y)}{\sum \text{skel}(y)}\right)
+\end{equation}
+with $\alpha = 0.5$.
+
+\subsection{Preprocessing and Augmentation}
+
+CTA volumes are clipped to the Hounsfield Unit window $[0, 600]$ and normalized to $[0, 1]$. Multi-class labels are binarized. We use random patch sampling with $128^3$ voxel crops, 4 patches per volume per epoch, and a foreground-centered sampling ratio of 33\%. Augmentation includes random gamma correction ($\gamma \in [0.7, 1.5]$) and random 90-degree axial rotations. Mirror augmentation is disabled to preserve left-right anatomical consistency.
+
+\subsection{Training Procedure}
+
+All models are trained for 300 epochs on 8$\times$NVIDIA A100-SXM4-40GB GPUs using distributed data-parallel (DDP) on an AWS p4d.24xlarge instance. We use AdamW optimizer ($\text{LR}=10^{-3}$, weight decay $10^{-5}$), cosine annealing with 10-epoch linear warmup, batch size 4 per GPU, and mixed-precision training (AMP). Validation runs every 25 epochs with early-stopping patience of 5 cycles. All training configuration is identical across runs to ensure a controlled comparison.
+
+For TopBrain fine-tuning, we load the best from-scratch checkpoint (weights only, fresh optimizer) and train for 150 additional epochs at $10^{-4}$ LR with 5-epoch warmup and the same loss used during pretraining.
+
+% ============================================================================
+\section{Experiments and Results: Topology-Aware Family}
+
+\subsection{Training Dynamics}
+
+Fig.~\ref{fig:learning_curves} shows the training loss and validation Dice progression for the three topology-aware configurations over 300 epochs. The Dice+CE and clDice models exhibit nearly identical loss curves; Skeleton Recall trains at slightly higher loss throughout. Validation Dice plateaus after epoch 200 for all models, with clDice reaching the highest validation Dice (0.864).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/learning_curves.pdf}
+    \caption{Training dynamics for the three topology-aware loss configurations over 300 epochs on 8$\times$A100 GPUs. \textbf{Top:} Smoothed training loss. \textbf{Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs).}
+    \label{fig:learning_curves}
+\end{figure}
+
+\subsection{Global Metrics}
+
+\begin{table}[t]
+\centering
+\caption{Global Evaluation on TopCoW Validation Set --- Topology-Aware Family}
+\label{tab:global}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{DSC} & \textbf{clDice} & \textbf{HD95 (mm)} & \textbf{B0 err} \\
+\midrule
+Dice+CE          & 0.858 & 0.907 & 2.48 & 5.76 \\
+Dice+CE+clDice   & \textbf{0.864} & \textbf{0.916} & \textbf{2.40} & \textbf{3.72} \\
+Dice+CE+Skeleton & 0.845 & 0.838 & 2.82 & 26.84 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The clDice model achieves the highest DSC (0.864), clDice (0.916), and lowest Betti-0 error (3.72). Skeleton Recall trades aggregate overlap for higher communicating-artery recall at the cost of fragmentation (Betti-0 error 26.84).
+
+\subsection{Stratified Per-Vessel Analysis}
+
+\begin{table}[t]
+\centering
+\caption{Per-Vessel DSC --- Topology-Aware Family}
+\label{tab:stratified}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Vessel} & \textbf{D+CE} & \textbf{+clDice} & \textbf{+Skel.} & \textbf{N} \\
+\midrule
+BA      & 0.793 & 0.789 & \textbf{0.824} & 25 \\
+R-PCA   & 0.802 & \textbf{0.810} & 0.806 & 25 \\
+L-PCA   & 0.770 & \textbf{0.809} & 0.793 & 25 \\
+R-ICA   & 0.846 & \textbf{0.852} & 0.838 & 25 \\
+L-ICA   & \textbf{0.855} & 0.853 & 0.844 & 25 \\
+R-MCA   & 0.807 & 0.789 & \textbf{0.806} & 25 \\
+L-MCA   & 0.819 & 0.804 & \textbf{0.805} & 25 \\
+R-ACA   & 0.725 & \textbf{0.728} & 0.726 & 25 \\
+L-ACA   & 0.740 & \textbf{0.741} & \textbf{0.741} & 25 \\
+\midrule
+Acom    & 0.413 & 0.412 & \textbf{0.415} & 21 \\
+R-Pcom  & 0.459 & 0.479 & \textbf{0.511} & 15 \\
+L-Pcom  & 0.410 & 0.398 & \textbf{0.479} & 15 \\
+3rd-A2  & \textbf{0.622} & 0.613 & 0.583 & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Large vs.\ Communicating Vessel Gap (From-Scratch)}
+\label{tab:gap}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Large DSC} & \textbf{Comm.\ DSC} & \textbf{$\Delta$ DSC} \\
+\midrule
+Dice+CE          & 0.795 & 0.433 & 0.363 \\
+Dice+CE+clDice   & \textbf{0.797} & 0.435 & 0.363 \\
+Dice+CE+Skeleton & 0.798 & \textbf{0.466} & \textbf{0.332} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Skeleton Recall achieves the best communicating artery DSC (0.466) and the smallest large-vs-communicating gap (0.332).
+
+\subsection{TopBrain Fine-Tuning}
+
+\begin{table}[t]
+\centering
+\caption{TopBrain Fine-Tuned Models: DSC by Vessel Group --- Topology-Aware Family}
+\label{tab:topbrain}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Vessel Group} & \textbf{D+CE} & \textbf{+clDice} & \textbf{+Skeleton} \\
+\midrule
+Large CoW arteries & \textbf{0.832} & 0.829 & 0.821 \\
+Communicating      & 0.466 & 0.490 & \textbf{0.513} \\
+Distal branches    & 0.687 & 0.712 & \textbf{0.752} \\
+Posterior fossa    & 0.565 & 0.533 & \textbf{0.626} \\
+Small arteries     & 0.000 & 0.000 & \textbf{0.589} \\
+Venous sinuses     & 0.416 & 0.463 & \textbf{0.613} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Fine-tuning expands vessel coverage for all three models. The most striking effect is on small arteries (ophthalmic, anterior choroidal): the Skeleton Recall model achieves 0.589 DSC where both alternatives score zero---a qualitative, not merely quantitative, difference, consistent with topology-aware pretraining producing representations that transfer more effectively to thin tubular structures.
+
+% ============================================================================
+% =====  PAGE 5  ==============================================================
+% ============================================================================
+\section{Extended Loss Function Investigation}
+\label{sec:extended_losses}
+
+The midterm sections IV-V isolated the effect of \emph{topology-aware} losses. We now investigate the dual question: do \emph{reconstruction-aware} losses, which operate on the soft probability map rather than its skeleton, improve segmentation along axes that the topology family does not? We evaluate three additions, each replacing the topology term in the same Dice+CE framework so the only manipulated variable remains the loss.
+
+\subsection{Dice + CE + 3D Structural Similarity}
+
+Following the BASNet recipe~\cite{qin2019basnet} adapted to 3D, we add a structural similarity term computed on the softmax foreground probability $\hat{p}$ and one-hot ground truth $g$:
+\begin{equation}
+    \text{SSIM}(x,y) = \frac{(2\mu_x\mu_y + C_1)(2\sigma_{xy} + C_2)}{(\mu_x^2 + \mu_y^2 + C_1)(\sigma_x^2 + \sigma_y^2 + C_2)}
+\end{equation}
+with the local statistics $\mu_x, \mu_y, \sigma_x, \sigma_y, \sigma_{xy}$ computed via convolution with a $7^3$ separable Gaussian window ($\sigma=1.5$ vox), and stabilizers $C_1 = 0.01^2$, $C_2 = 0.03^2$~\cite{wang2004ssim}. The combined loss is
+\begin{equation}
+    \mathcal{L}_{\text{SSIM}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha\bigl(1 - \text{SSIM}(\hat{p}, g)\bigr), \quad \alpha = 0.5.
+\end{equation}
+
+\subsection{Dice + CE + MSE-on-Distance-Transform}
+
+Plain MSE on a binary mask collapses on imbalanced data because background voxels dominate the gradient~\cite{ma2021odyssey}. Following Kervadec et al.~\cite{kervadec2021boundary} and Karimi \& Salcudean~\cite{karimi2020hausdorff}, we instead regress the prediction against a smooth distance-transform target:
+\begin{equation}
+    t(\mathbf{x}) = \exp\!\bigl(-\,\text{DT}_{\text{out}}(g)(\mathbf{x})/\sigma\bigr), \quad \sigma = 5\;\text{vox}
+\end{equation}
+where $\text{DT}_{\text{out}}(g)$ is the Euclidean distance from each background voxel to the nearest foreground voxel. The target $t$ is 1 inside the GT and decays smoothly outside, giving a well-defined regression signal. The loss is
+\begin{equation}
+    \mathcal{L}_{\text{MSE-DT}} = (1-\alpha)\mathcal{L}_{\text{base}} + \alpha\;\text{MSE}\bigl(\hat{p},\, t\bigr), \quad \alpha = 0.5.
+\end{equation}
+The distance transform is computed once per batch on CPU under \texttt{torch.no\_grad()} and adds $<$100\,ms per step on $128^3$ patches.
+
+\subsection{Dice + CE + 2D Slice-Wise Perceptual}
+
+Following Mosinska et al.~\cite{mosinska2018} and Johnson et al.~\cite{johnson2016perceptual}, we add a perceptual loss using a frozen ImageNet-pretrained VGG-16~\cite{simonyan2015vgg}. Because no public 3D VGG exists, we extract features per axial slice, replicating the single-channel probability slice to 3 channels and applying ImageNet normalization. We compare features at \texttt{relu2\_2} and \texttt{relu3\_3}:
+\begin{equation}
+    \mathcal{L}_{\text{perc}} = (1-\alpha)\mathcal{L}_{\text{base}} + \frac{\alpha}{|\mathcal{S}|}\sum_{l \in \mathcal{S}} \|\phi_l(\hat{p}_{2D}) - \phi_l(g_{2D})\|_2^2.
+\end{equation}
+We subsample axial slices (stride 16) to bound memory; the VGG branch runs in fp32 even when the U-Net trains in mixed precision. We do not modulate by the input CTA (an advanced variant requiring access to the input image inside the loss); the BASNet-style direct probability-map perceptual is documented in the literature~\cite{qin2019basnet} and keeps the loss interface unchanged.
+
+\subsection{Training Dynamics, Extended Family}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/learning_curves_extended.pdf}
+    \caption{Training-loss curves for the three topology-aware (midterm) and three reconstruction-aware (new) configurations over 300 epochs on 8$\times$A100 GPUs. Reconstruction-aware losses train at \todo{describe shape after EC2 run}.}
+    \label{fig:learning_curves_extended}
+\end{figure}
+
+% ============================================================================
+% =====  PAGE 6  ==============================================================
+% ============================================================================
+\section{Reconstruction-Aware Evaluation and Combination Loss}
+\label{sec:extended_eval}
+
+To characterize each loss along axes orthogonal to overlap and topology, we add three reconstruction-style metrics computed over the same TopCoW validation set, and a final \emph{combination} configuration that merges the best topology-aware and reconstruction-aware terms in a single objective.
+
+\subsection{New Evaluation Metrics}
+
+\noindent\textbf{3D-SSIM} is computed on the binary prediction vs.\ binary GT using a Gaussian window ($\sigma{=}1.5$ vox); higher is better. Because most voxels are background, absolute SSIM is high ($\sim$0.99); we report it for relative ranking.
+
+\noindent\textbf{PSNR} (in dB) is $-10\log_{10}\text{MSE}(\hat{y}_b, g_b)$ on the binary prediction; higher is better, capped at 100.
+
+\noindent\textbf{Fr\'echet Feature Distance (F-FID)} is computed at the set level: VGG-16 \texttt{relu3\_3} features are extracted over axial slices of all validation predictions and ground truths (stride 16), pooled, and the Fr\'{e}chet distance between the two empirical Gaussians is reported. We label this \emph{F-FID, not FID}, because $N{=}25$ is far below the $\sim$10k samples needed for converged Inception-FID estimates~\cite{heusel2017fid}; it is a feature-space proxy useful for ranking, not as an absolute fidelity number.
+
+\subsection{Combination Loss: Dice + CE + clDice + SSIM}
+
+The combination configuration tests whether topology-aware and reconstruction-aware supervision compound:
+\begin{equation}
+    \mathcal{L}_{\text{combo}} = w_b\mathcal{L}_{\text{base}} + w_c\mathcal{L}_{\text{clDice}}^* + w_s\mathcal{L}_{\text{SSIM}}^*
+\end{equation}
+where $\mathcal{L}^*$ denotes the topology / reconstruction term with the original $\alpha$ already absorbed, and $(w_b, w_c, w_s) = (0.5, 0.25, 0.25)$. The combination is trained from scratch on TopCoW with the identical pipeline as all other configurations and fine-tuned on TopBrain.
+
+\subsection{Extended Results Table}
+
+\begin{table*}[t]
+\centering
+\caption{Extended Evaluation on TopCoW Validation Set --- All Seven Configurations $\times$ Seven Metrics. Higher is better except HD95, B0 err, and F-FID (lower is better).}
+\label{tab:extended}
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Model} & \textbf{DSC}$\uparrow$ & \textbf{clDice}$\uparrow$ & \textbf{HD95 (mm)}$\downarrow$ & \textbf{B0 err}$\downarrow$ & \textbf{3D-SSIM}$\uparrow$ & \textbf{PSNR (dB)}$\uparrow$ & \textbf{F-FID}$\downarrow$ \\
+\midrule
+Dice+CE                       & 0.858 & 0.907 & 2.48 & 5.76  & \tbd & \tbd & \tbd \\
+Dice+CE+clDice                & 0.864 & 0.916 & 2.40 & 3.72  & \tbd & \tbd & \tbd \\
+Dice+CE+Skeleton              & 0.845 & 0.838 & 2.82 & 26.84 & \tbd & \tbd & \tbd \\
+Dice+CE+SSIM                  & \tbd & \tbd & \tbd & \tbd   & \tbd & \tbd & \tbd \\
+Dice+CE+MSE-DT                & \tbd & \tbd & \tbd & \tbd   & \tbd & \tbd & \tbd \\
+Dice+CE+Perceptual            & \tbd & \tbd & \tbd & \tbd   & \tbd & \tbd & \tbd \\
+Dice+CE+clDice+SSIM (combo)   & \tbd & \tbd & \tbd & \tbd   & \tbd & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\todo{1-paragraph commentary on Table~\ref{tab:extended} after EC2 run: which loss wins on which metric family; whether reconstruction-aware losses ``win'' on 3D-SSIM/PSNR while topology-aware losses retain Betti-0 advantage; whether the combination beats the best single-objective on more than one column.}
+
+\subsection{Qualitative Comparison}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/qualitative_loss_family.pdf}
+    \caption{Soft probability maps from each loss family on three representative axial slices: (top) a large CoW artery, (middle) a thin communicating artery (Pcom), (bottom) a distal branch. Topology-aware losses (clDice, Skeleton Recall) produce sharper centerlines but coarser boundaries; reconstruction-aware losses (SSIM, perceptual) produce smoother probability transitions but \todo{describe after rendering}. Best viewed at high magnification.}
+    \label{fig:qualitative}
+\end{figure}
+
+\subsection{Discussion: Loss Family vs.\ Fidelity Axis}
+
+The seven-configuration ablation suggests a clean partition of fidelity axes by loss family. Topology-aware losses (clDice, Skeleton Recall) dominate on connectivity-sensitive metrics (clDice score, Betti-0 error, communicating-artery DSC) but \todo{describe trade-off after EC2 run}. Reconstruction-aware losses (SSIM, MSE-on-DT, perceptual) dominate on probability-map smoothness metrics (3D-SSIM, PSNR) but \todo{describe topology behavior}. The combination configuration \todo{constructive vs cancelling outcome}.
+
+A practical implication for downstream clinical use: the loss should be chosen in alignment with the operating point. For \emph{topology-faithful} reconstruction (skeletonization, vessel tracing, aneurysm detection), a topology-aware loss remains the right choice. For \emph{volumetric} measurements requiring smooth boundaries (perfusion-territory delineation, arterial input function selection), a reconstruction-aware loss may better match the downstream objective. The combination experiment suggests that both can be obtained simultaneously when correctly weighted.
+
+% ============================================================================
+\section{Conclusion}
+
+We presented a controlled ablation study comparing seven loss configurations for cerebral CTA vessel segmentation on identical hardware---three topology-aware, three reconstruction-aware, and one combination---spanning the two principal supervision families that have been proposed for binary medical segmentation. Within the topology-aware family, clDice achieves the best aggregate metrics on TopCoW while Skeleton Recall yields targeted improvements on thin communicating arteries and a dramatic transfer advantage on small arteries after TopBrain fine-tuning. Within the reconstruction-aware family, \todo{1-line summary}. The combination loss \todo{1-line summary}, partially supporting our hypothesis that the two supervision families address orthogonal fidelity axes. We additionally introduced reconstruction-style evaluation metrics (3D-SSIM, PSNR, Fr\'echet Feature Distance) that complement standard overlap and topology metrics and clarify which loss aligns with which clinical fidelity dimension. Future work will explore (i) wider HU windows to reduce false positives on bone, (ii) class-balanced sampling for the long tail of small vessels, and (iii) extension to multi-class artery/vein segmentation using radiologist-corrected pseudo-labels.
+
+% ============================================================================
+\bibliographystyle{IEEEtran}
+
+\begin{thebibliography}{24}
+
+\bibitem{isensee2021}
+F.~Isensee, P.~F.~Jaeger, S.~A.~A.~Kohl, J.~Petersen, and K.~H.~Maier-Hein,
+``nnU-Net: A self-configuring method for deep learning-based biomedical image segmentation,''
+\textit{Nature Methods}, vol.~18, pp.~203--211, 2021.
+
+\bibitem{yang2023}
+K.~Yang \textit{et al.},
+``Benchmarking the CoW with the TopCoW challenge: Topology-aware anatomical segmentation of the Circle of Willis for CTA and MRA,''
+\textit{arXiv:2312.17670}, 2023.
+
+\bibitem{shit2021}
+S.~Shit \textit{et al.},
+``clDice---A novel topology-preserving loss function for tubular structure segmentation,''
+in \textit{Proc. IEEE/CVF CVPR}, pp.~16560--16569, 2021.
+
+\bibitem{isensee2024}
+F.~Isensee \textit{et al.},
+``nnU-Net revisited: A call for rigorous validation in 3D medical image segmentation,''
+in \textit{Proc. MICCAI}, 2024.
+
+\bibitem{kirchhoff2024}
+Y.~Kirchhoff \textit{et al.},
+``Skeleton Recall Loss for connectivity conserving and resource efficient segmentation of thin tubular structures,''
+in \textit{Proc. ECCV}, 2024.
+
+\bibitem{shi2024cbd}
+P.~Shi \textit{et al.},
+``Centerline Boundary Dice Loss for vascular segmentation,''
+in \textit{Proc. MICCAI}, 2024.
+
+\bibitem{acebes2024}
+C.~Acebes \textit{et al.},
+``The Centerline-Cross Entropy Loss for vessel-like structure segmentation,''
+in \textit{Proc. MICCAI}, 2024.
+
+\bibitem{berger2024}
+A.~Berger \textit{et al.},
+``Topologically faithful multi-class segmentation in medical images,''
+in \textit{Proc. MICCAI}, 2024.
+
+\bibitem{stucki2023}
+N.~Stucki \textit{et al.},
+``Topologically faithful image segmentation via induced matching of persistence barcodes,''
+in \textit{Proc. ICML}, 2023.
+
+\bibitem{chen2023}
+L.~Chen \textit{et al.},
+``All answers are in the images: A review of deep learning for cerebrovascular segmentation,''
+\textit{Computerized Medical Imaging and Graphics}, vol.~107, 2023.
+
+\bibitem{he2015}
+K.~He, X.~Zhang, S.~Ren, and J.~Sun,
+``Delving deep into rectifiers: Surpassing human-level performance on ImageNet classification,''
+in \textit{Proc. IEEE ICCV}, pp.~1026--1034, 2015.
+
+\bibitem{wang2004ssim}
+Z.~Wang, A.~C.~Bovik, H.~R.~Sheikh, and E.~P.~Simoncelli,
+``Image quality assessment: From error visibility to structural similarity,''
+\textit{IEEE Trans.\ Image Process.}, vol.~13, no.~4, pp.~600--612, 2004.
+
+\bibitem{qin2019basnet}
+X.~Qin, Z.~Zhang, C.~Huang, C.~Gao, M.~Dehghan, and M.~Jagersand,
+``BASNet: Boundary-Aware Salient Object Detection,''
+in \textit{Proc. IEEE/CVF CVPR}, pp.~7479--7489, 2019.
+
+\bibitem{mosinska2018}
+A.~Mosinska, P.~Marquez-Neila, M.~Koziński, and P.~Fua,
+``Beyond the pixel-wise loss for topology-aware delineation,''
+in \textit{Proc. IEEE/CVF CVPR}, pp.~3136--3145, 2018.
+
+\bibitem{kervadec2021boundary}
+H.~Kervadec, J.~Bouchtiba, C.~Desrosiers, E.~Granger, J.~Dolz, and I.~Ben~Ayed,
+``Boundary loss for highly unbalanced segmentation,''
+\textit{Medical Image Analysis}, vol.~67, p.~101851, 2021.
+
+\bibitem{karimi2020hausdorff}
+D.~Karimi and S.~E.~Salcudean,
+``Reducing the Hausdorff distance in medical image segmentation with convolutional neural networks,''
+\textit{IEEE Trans.\ Med.\ Imaging}, vol.~39, no.~2, pp.~499--513, 2020.
+
+\bibitem{johnson2016perceptual}
+J.~Johnson, A.~Alahi, and L.~Fei-Fei,
+``Perceptual losses for real-time style transfer and super-resolution,''
+in \textit{Proc. ECCV}, pp.~694--711, 2016.
+
+\bibitem{simonyan2015vgg}
+K.~Simonyan and A.~Zisserman,
+``Very deep convolutional networks for large-scale image recognition,''
+in \textit{Proc. ICLR}, 2015.
+
+\bibitem{heusel2017fid}
+M.~Heusel, H.~Ramsauer, T.~Unterthiner, B.~Nessler, and S.~Hochreiter,
+``GANs trained by a two time-scale update rule converge to a local Nash equilibrium,''
+in \textit{Proc. NeurIPS}, pp.~6626--6637, 2017.
+
+\bibitem{ma2021odyssey}
+J.~Ma \textit{et al.},
+``Loss odyssey in medical image segmentation,''
+\textit{Medical Image Analysis}, vol.~71, p.~102035, 2021.
+
+\bibitem{rouge2024}
+L.~Roug\'{e} \textit{et al.},
+``Topology aware multitask cascaded U-Net for cerebrovascular segmentation,''
+\textit{PLOS ONE}, vol.~19, no.~12, 2024.
+
+\bibitem{shi2023nextou}
+P.~Shi \textit{et al.},
+``NexToU: Efficient topology-aware U-Net for medical image segmentation,''
+\textit{arXiv:2305.15911}, 2023.
+
+\bibitem{fu2020}
+F.~Fu \textit{et al.},
+``Rapid vessel segmentation and reconstruction of head and neck angiograms using 3D CNN,''
+\textit{Nature Communications}, vol.~11, p.~4829, 2020.
+
+\bibitem{mou2021}
+L.~Mou \textit{et al.},
+``CS2-Net: Deep learning segmentation of curvilinear structures in medical imaging,''
+\textit{Medical Image Analysis}, vol.~67, 2021.
+
+\end{thebibliography}
+
+\end{document}

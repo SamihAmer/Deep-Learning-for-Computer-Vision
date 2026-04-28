@@ -315,3 +315,24 @@ def train_val_split(
     rng.shuffle(shuffled)
     n_train = int(len(shuffled) * ratio)
     return shuffled[:n_train], shuffled[n_train:]
+
+
+def discover_av_pseudo_cases(
+    images_dir: str, labels_dir: str
+) -> List[Dict[str, str]]:
+    """Find image/AV-label pairs for the pseudo-labeled fine-tune set.
+
+    Expects matching filenames:
+        images_dir/CTA_001_Thins_with_contrast.nii.gz
+        labels_dir/CTA_001_Thins_with_contrast.nii.gz   (3-class: 0=bg, 1=artery, 2=vein)
+    """
+    images = sorted(glob.glob(os.path.join(images_dir, "*.nii.gz")))
+    cases = []
+    for img_path in images:
+        basename = os.path.basename(img_path)
+        lbl_path = os.path.join(labels_dir, basename)
+        if os.path.exists(lbl_path):
+            cases.append({"image": img_path, "label": lbl_path})
+        else:
+            print(f"Warning: no AV label found for {basename}, skipping.")
+    return cases

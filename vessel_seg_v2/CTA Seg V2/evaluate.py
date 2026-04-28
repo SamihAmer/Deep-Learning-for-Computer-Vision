@@ -35,6 +35,8 @@ def parse_args():
     parser.add_argument("--topbrain_dir", type=str, default=None,
                         help="Path to TopBrain dataset root (evaluate on TopBrain labels instead of TopCoW)")
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--extended_metrics", action="store_true",
+                        help="Also compute 3D-SSIM, PSNR, and F-FID (final-report metrics)")
     return parser.parse_args()
 
 
@@ -78,7 +80,11 @@ def main():
 
     # Run inference + evaluation
     global_metrics = {"dice": [], "cldice": [], "hd95": [], "betti0_error": []}
+    if args.extended_metrics:
+        global_metrics.update({"ssim3d": [], "psnr": []})
     all_stratified = []
+    pred_volumes_for_fid = []  # accumulated across cases for set-level F-FID
+    gt_volumes_for_fid = []
 
     for i, case in enumerate(val_cases):
         t0 = time.time()
@@ -99,9 +105,16 @@ def main():
         # Global metrics (binary)
         gt_binary = (lbl > 0).astype(np.uint8)
         spacing = meta.get("spacing", (1, 1, 1))
-        vol_metrics = evaluate_volume(pred, gt_binary, voxel_spacing=spacing)
+        vol_metrics = evaluate_volume(
+            pred, gt_binary, voxel_spacing=spacing,
+            extended=args.extended_metrics,
+        )
         for k, v in vol_metrics.items():
             global_metrics[k].append(v)
+
+        if args.extended_metrics:
+            pred_volumes_for_fid.append(pred.astype(np.float32))
+            gt_volumes_for_fid.append(gt_binary.astype(np.float32))
 
         # Stratified metrics (per vessel class, using multiclass GT)
         strat = evaluate_volume_stratified(pred, lbl.astype(np.uint8))
@@ -110,6 +123,17 @@ def main():
         elapsed = time.time() - t0
         case_name = os.path.basename(case["image"])
         print(f"  [{i+1}/{len(val_cases)}] {case_name} | DSC: {vol_metrics['dice']:.4f} | clDice: {vol_metrics['cldice']:.4f} | {elapsed:.0f}s")
+
+    # Set-level F-FID across the whole validation set (one number)
+    feature_fid = None
+    if args.extended_metrics:
+        from utils.metrics import compute_feature_fid
+        print("\nComputing Fréchet Feature Distance over validation set...")
+        feature_fid = compute_feature_fid(
+            pred_volumes_for_fid, gt_volumes_for_fid,
+            slice_stride=16, device=str(device),
+        )
+        print(f"  F-FID: {feature_fid:.4f}  (caveat: N={len(pred_volumes_for_fid)} is far below the ~10k samples needed for converged FID)")
 
     # Aggregate global metrics
     print(f"\n{'='*60}")
@@ -213,6 +237,9 @@ def main():
             for gname in group_sets
         },
     }
+
+    if feature_fid is not None:
+        results["global"]["feature_fid"] = {"value": feature_fid, "n_volumes": len(pred_volumes_for_fid)}
 
     results_path = os.path.join(out_dir, "stratified_eval.json")
     with open(results_path, "w") as f:

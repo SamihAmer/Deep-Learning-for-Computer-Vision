@@ -28,9 +28,22 @@ CONFIG = {
     "deep_supervision": True,
 
     # ── Loss ──────────────────────────────────────────────────────────────
-    "loss": "dice_ce",                         # "dice_ce" | "dice_ce_cldice" | "dice_ce_skeleton"
-    "cldice_alpha": 0.5,                       # weight for topology loss when combined
-    "skeleton_recall_alpha": 0.5,
+    "loss": "dice_ce",                         # midterm: dice_ce | dice_ce_cldice | dice_ce_skeleton
+                                                #    final: dice_ce_ssim | dice_ce_mse_dt
+                                                #           dice_ce_perceptual | dice_ce_cldice_ssim
+    "cldice_alpha": 0.5,                       # weight for clDice when combined with dice+CE
+    "skeleton_recall_alpha": 0.5,              # weight for Skeleton Recall when combined
+
+    # Final-report extended losses (no-ops unless the matching `loss` is selected)
+    "ssim_alpha": 0.5,                         # weight for SSIM term
+    "ssim_window_size": 7,                     # 3D Gaussian window edge length
+    "mse_dt_alpha": 0.5,                       # weight for MSE-on-DT term
+    "mse_dt_sigma": 5.0,                       # decay (voxels) for exp(-DT/sigma) target
+    "perceptual_alpha": 0.5,                   # weight for VGG perceptual term
+    "perceptual_slice_stride": 16,             # axial slice stride for VGG forward
+    "combo_dice_ce_w": 0.5,                    # combo loss: weight for Dice+CE component
+    "combo_cldice_w": 0.25,                    # combo loss: weight for clDice component
+    "combo_ssim_w": 0.25,                      # combo loss: weight for SSIM component
 
     # ── Training ──────────────────────────────────────────────────────────
     "epochs": 300,

@@ -37,7 +37,13 @@ from torch.cuda.amp import GradScaler
 
 # ── Project imports ───────────────────────────────────────────────────────────
 from configs.default import CONFIG
-from data.dataset import discover_cases, discover_topbrain_cases, train_val_split, TopCoWPatchDataset
+from data.dataset import (
+    discover_cases,
+    discover_topbrain_cases,
+    discover_av_pseudo_cases,
+    train_val_split,
+    TopCoWPatchDataset,
+)
 from models.unet3d import UNet3D
 from losses.losses import build_loss
 from utils.metrics import evaluate_volume
@@ -77,7 +83,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train 3D U-Net for vessel segmentation")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to TopCoW dataset root")
     parser.add_argument("--output_dir", type=str, default=None)
-    parser.add_argument("--loss", type=str, default=None, choices=["dice_ce", "dice_ce_cldice", "dice_ce_skeleton"])
+    parser.add_argument("--loss", type=str, default=None, choices=[
+        # Midterm topology-aware family
+        "dice_ce", "dice_ce_cldice", "dice_ce_skeleton",
+        # Final-report reconstruction-aware + combination family
+        "dice_ce_ssim", "dice_ce_mse_dt", "dice_ce_perceptual",
+        "dice_ce_cldice_ssim",
+    ])
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
@@ -90,6 +102,10 @@ def parse_args():
                         help="Path to checkpoint .pth to fine-tune from (loads model weights only, fresh optimizer)")
     parser.add_argument("--topbrain_dir", type=str, default=None,
                         help="Path to TopBrain dataset root (uses 40-class labels instead of TopCoW 13-class)")
+    parser.add_argument("--av_pseudo_images", type=str, default=None,
+                        help="Directory of CTA images for 3-class artery/vein pseudo-label fine-tuning")
+    parser.add_argument("--av_pseudo_labels", type=str, default=None,
+                        help="Directory of 3-class A/V labels (0=bg, 1=artery, 2=vein)")
     parser.add_argument("--include_patients", type=str, default=None,
                         help="Comma-separated patient IDs to include (e.g. 001,002,010). Others excluded from training.")
     parser.add_argument("--patches_per_volume", type=int, default=None,
@@ -430,9 +446,28 @@ def main():
     else:
         torch.backends.cudnn.benchmark = True
 
-    # Data — use TopBrain if --topbrain_dir provided, else TopCoW
+    # Data: AV pseudo-label → TopBrain → TopCoW precedence
     modality = cfg.get("modality", "ct")
-    if args.topbrain_dir:
+    if args.av_pseudo_images and args.av_pseudo_labels:
+        # AV pseudo-label mode implies 3-class (bg/artery/vein); auto-set if caller
+        # didn't override, and hard-fail on mismatch so a stale 2-class config
+        # doesn't silently truncate vein labels.
+        if cfg["num_classes"] == 2:
+            if is_main():
+                print("AV pseudo mode: overriding num_classes 2 → 3")
+            cfg["num_classes"] = 3
+        elif cfg["num_classes"] != 3:
+            raise RuntimeError(
+                f"AV pseudo mode requires num_classes=3, got {cfg['num_classes']}"
+            )
+        if is_main():
+            print(f"\nDiscovering AV pseudo-label cases")
+            print(f"  images: {args.av_pseudo_images}")
+            print(f"  labels: {args.av_pseudo_labels}")
+        all_cases = discover_av_pseudo_cases(args.av_pseudo_images, args.av_pseudo_labels)
+        if is_main():
+            print(f"Found {len(all_cases)} AV pseudo-label cases (3-class: bg/artery/vein)")
+    elif args.topbrain_dir:
         if is_main():
             print(f"\nDiscovering TopBrain cases in {args.topbrain_dir}...")
         all_cases = discover_topbrain_cases(args.topbrain_dir, modality=modality)
@@ -446,13 +481,14 @@ def main():
         if is_main():
             print(f"Found {len(all_cases)} cases (modality filter: {modality})")
 
-    # Sanity check: log modality breakdown of discovered cases
-    ct_count = sum(1 for c in all_cases if "topcow_ct_" in os.path.basename(c["image"]))
-    mr_count = sum(1 for c in all_cases if "topcow_mr_" in os.path.basename(c["image"]))
-    if is_main():
-        print(f"  CT cases: {ct_count}, MR cases: {mr_count}")
-    if modality == "ct" and mr_count > 0:
-        raise RuntimeError(f"Modality filter is 'ct' but {mr_count} MR cases slipped through — check discover_cases()")
+    # Sanity check: modality breakdown (only meaningful for TopCoW/TopBrain naming)
+    if not (args.av_pseudo_images and args.av_pseudo_labels):
+        ct_count = sum(1 for c in all_cases if "topcow_ct_" in os.path.basename(c["image"]))
+        mr_count = sum(1 for c in all_cases if "topcow_mr_" in os.path.basename(c["image"]))
+        if is_main():
+            print(f"  CT cases: {ct_count}, MR cases: {mr_count}")
+        if modality == "ct" and mr_count > 0:
+            raise RuntimeError(f"Modality filter is 'ct' but {mr_count} MR cases slipped through — check discover_cases()")
 
     train_cases, val_cases = train_val_split(all_cases, cfg["train_val_split"])
     if is_main():
@@ -509,10 +545,13 @@ def main():
         print(f"Deep supervision: {cfg['deep_supervision']}")
         if world_size > 1:
             print(f"DDP: {world_size} GPUs, effective batch size = {cfg['batch_size'] * world_size}")
-            print(f"LR scaled: {cfg['learning_rate']:.1e} (base {cfg['learning_rate'] / world_size:.1e} x {world_size})")
+            print(f"LR: {cfg['learning_rate']:.1e} (NOT scaled with world_size by design — see comment above)")
 
-    # Loss, optimizer, scheduler
-    criterion = build_loss(cfg)
+    # Loss, optimizer, scheduler. Move criterion to device so any nn.Module
+    # buffers (SSIM Gaussian window) or sub-modules (VGG perceptual backbone)
+    # land on GPU; without this, SSIM/perceptual losses crash on first
+    # forward pass with a CPU/GPU device-mismatch error.
+    criterion = build_loss(cfg).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg["learning_rate"],
