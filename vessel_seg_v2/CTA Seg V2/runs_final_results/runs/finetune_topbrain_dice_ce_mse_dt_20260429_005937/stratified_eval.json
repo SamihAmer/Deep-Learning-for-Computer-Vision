@@ -1,0 +1,306 @@
+{
+  "global": {
+    "dice": {
+      "mean": 0.7430689578540424,
+      "std": 0.0360815151599304
+    },
+    "cldice": {
+      "mean": 0.7185610608366679,
+      "std": 0.0391213817051577
+    },
+    "hd95": {
+      "mean": 16.251536097800372,
+      "std": 6.60181229508978
+    },
+    "betti0_error": {
+      "mean": 278.2,
+      "std": 95.33184148016863
+    },
+    "ssim3d": {
+      "mean": 0.9840674996376038,
+      "std": 0.0033634222404637683
+    },
+    "psnr": {
+      "mean": 28.220011296529613,
+      "std": 1.1481275772782387
+    },
+    "feature_fid": {
+      "value": 0.07563408499171675,
+      "n_volumes": 5
+    }
+  },
+  "per_class": {
+    "BA": {
+      "dice": 0.8375324683267955,
+      "cldice": 0.924054471715715,
+      "betti0_error": 3.2,
+      "n_volumes": 5
+    },
+    "R-PCA": {
+      "dice": 0.8260343087413549,
+      "cldice": 0.8749776778015151,
+      "betti0_error": 2.6,
+      "n_volumes": 5
+    },
+    "L-PCA": {
+      "dice": 0.8396260273329812,
+      "cldice": 0.9119053512279637,
+      "betti0_error": 2.6,
+      "n_volumes": 5
+    },
+    "R-ICA": {
+      "dice": 0.8541777684545199,
+      "cldice": 0.9132514812363398,
+      "betti0_error": 0.4,
+      "n_volumes": 5
+    },
+    "R-MCA": {
+      "dice": 0.8232480631405341,
+      "cldice": 0.9407794399401114,
+      "betti0_error": 0.0,
+      "n_volumes": 4
+    },
+    "L-ICA": {
+      "dice": 0.8917945446708033,
+      "cldice": 0.8858259320588087,
+      "betti0_error": 1.25,
+      "n_volumes": 4
+    },
+    "L-MCA": {
+      "dice": 0.8513583225870651,
+      "cldice": 0.9137570380931063,
+      "betti0_error": 0.75,
+      "n_volumes": 4
+    },
+    "R-Pcom": {
+      "dice": 0.4662091982527091,
+      "cldice": 0.5165786079793652,
+      "betti0_error": 1.4,
+      "n_volumes": 5
+    },
+    "L-Pcom": {
+      "dice": 0.32075471698113206,
+      "cldice": 0.4545454545454546,
+      "betti0_error": 1.0,
+      "n_volumes": 1
+    },
+    "Acom": {
+      "dice": 0.49859692878461664,
+      "cldice": 0.5960850743459439,
+      "betti0_error": 0.25,
+      "n_volumes": 4
+    },
+    "R-ACA": {
+      "dice": 0.7627746644177238,
+      "cldice": 0.8263733430798388,
+      "betti0_error": 3.4,
+      "n_volumes": 5
+    },
+    "L-ACA": {
+      "dice": 0.737793781433072,
+      "cldice": 0.7744794559903656,
+      "betti0_error": 3.2,
+      "n_volumes": 5
+    },
+    "3rd-A2": {
+      "dice": null,
+      "cldice": null,
+      "betti0_error": null,
+      "n_volumes": 0
+    },
+    "R-A3": {
+      "dice": 0.6372792219188905,
+      "cldice": 0.7179855286339891,
+      "betti0_error": 2.8,
+      "n_volumes": 5
+    },
+    "L-A3": {
+      "dice": 0.6907603923181613,
+      "cldice": 0.7471963521425729,
+      "betti0_error": 1.0,
+      "n_volumes": 4
+    },
+    "3rd-A3": {
+      "dice": null,
+      "cldice": null,
+      "betti0_error": null,
+      "n_volumes": 0
+    },
+    "R-M2": {
+      "dice": 0.8095335284548283,
+      "cldice": 0.860218997827806,
+      "betti0_error": 12.25,
+      "n_volumes": 4
+    },
+    "R-M3": {
+      "dice": 0.5974105406573372,
+      "cldice": 0.6855150026025107,
+      "betti0_error": 10.25,
+      "n_volumes": 4
+    },
+    "L-M2": {
+      "dice": 0.8098180657198935,
+      "cldice": 0.9011119020703057,
+      "betti0_error": 5.5,
+      "n_volumes": 4
+    },
+    "L-M3": {
+      "dice": 0.5954812018950684,
+      "cldice": 0.6722112332293229,
+      "betti0_error": 4.75,
+      "n_volumes": 4
+    },
+    "R-P3P4": {
+      "dice": 0.7453408245940283,
+      "cldice": 0.8183056832880835,
+      "betti0_error": 4.0,
+      "n_volumes": 4
+    },
+    "L-P3P4": {
+      "dice": 0.6093274896482743,
+      "cldice": 0.7194326881309457,
+      "betti0_error": 2.4,
+      "n_volumes": 5
+    },
+    "R-VA": {
+      "dice": 0.8556674448181851,
+      "cldice": 0.9104121927884787,
+      "betti0_error": 5.2,
+      "n_volumes": 5
+    },
+    "L-VA": {
+      "dice": 0.7885484916181229,
+      "cldice": 0.8586542831325026,
+      "betti0_error": 2.4,
+      "n_volumes": 5
+    },
+    "R-SCA": {
+      "dice": 0.28458484376333903,
+      "cldice": 0.36101566216562375,
+      "betti0_error": 3.4,
+      "n_volumes": 5
+    },
+    "L-SCA": {
+      "dice": 0.2189109244351101,
+      "cldice": 0.270098732484772,
+      "betti0_error": 3.4,
+      "n_volumes": 5
+    },
+    "R-AICA": {
+      "dice": 0.2931673278085438,
+      "cldice": 0.24729141070032387,
+      "betti0_error": 4.0,
+      "n_volumes": 3
+    },
+    "L-AICA": {
+      "dice": null,
+      "cldice": null,
+      "betti0_error": null,
+      "n_volumes": 0
+    },
+    "R-PICA": {
+      "dice": 0.5552436467547249,
+      "cldice": 0.6527593333119901,
+      "betti0_error": 5.5,
+      "n_volumes": 4
+    },
+    "L-PICA": {
+      "dice": 0.598840794030792,
+      "cldice": 0.6916340836837505,
+      "betti0_error": 5.0,
+      "n_volumes": 5
+    },
+    "R-AChA": {
+      "dice": null,
+      "cldice": null,
+      "betti0_error": null,
+      "n_volumes": 0
+    },
+    "L-AChA": {
+      "dice": null,
+      "cldice": null,
+      "betti0_error": null,
+      "n_volumes": 0
+    },
+    "R-OA": {
+      "dice": 0.0,
+      "cldice": 0.0,
+      "betti0_error": 1.2,
+      "n_volumes": 5
+    },
+    "L-OA": {
+      "dice": 0.0,
+      "cldice": 0.0,
+      "betti0_error": 1.25,
+      "n_volumes": 4
+    },
+    "VoG": {
+      "dice": 0.44679163349210665,
+      "cldice": 0.5819260715507918,
+      "betti0_error": 1.6,
+      "n_volumes": 5
+    },
+    "StS": {
+      "dice": 0.3662457671713772,
+      "cldice": 0.4588758162169973,
+      "betti0_error": 5.0,
+      "n_volumes": 5
+    },
+    "ICVs": {
+      "dice": 0.2539438158655056,
+      "cldice": 0.24979104188631265,
+      "betti0_error": 8.0,
+      "n_volumes": 5
+    },
+    "R-BVR": {
+      "dice": 0.44151809182682455,
+      "cldice": 0.43176178660049624,
+      "betti0_error": 1.0,
+      "n_volumes": 2
+    },
+    "L-BVR": {
+      "dice": 0.42269421898515247,
+      "cldice": 0.5577023624707406,
+      "betti0_error": 0.5,
+      "n_volumes": 2
+    },
+    "SSS": {
+      "dice": 0.7778130748927057,
+      "cldice": 0.8379856676752832,
+      "betti0_error": 29.2,
+      "n_volumes": 5
+    }
+  },
+  "grouped": {
+    "large": {
+      "dice": 0.8227452098839488,
+      "cldice": 0.8830156796577807,
+      "n": 42
+    },
+    "small": {
+      "dice": 0.4646188423383144,
+      "cldice": 0.5421778791826056,
+      "n": 10
+    },
+    "distal": {
+      "dice": 0.6831297580115614,
+      "cldice": 0.7625096402490317,
+      "n": 34
+    },
+    "posterior_fossa": {
+      "dice": 0.5260387207428836,
+      "cldice": 0.5878745730195178,
+      "n": 32
+    },
+    "small_arteries": {
+      "dice": 0.0,
+      "cldice": 0.0,
+      "n": 9
+    },
+    "venous": {
+      "dice": 0.45634983661385126,
+      "cldice": 0.5259092201995582,
+      "n": 24
+    }
+  }
+}

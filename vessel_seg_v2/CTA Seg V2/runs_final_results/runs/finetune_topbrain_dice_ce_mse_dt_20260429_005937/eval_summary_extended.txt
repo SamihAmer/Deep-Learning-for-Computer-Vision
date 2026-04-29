@@ -1,0 +1,91 @@
+Device: cuda:0
+Checkpoint epoch: 150
+Checkpoint best_dice: 0.7430627122772572
+Model loaded.
+
+Using TopBrain data (25 cases, 40-class labels)
+Evaluating on 5 validation cases (modality filter: ct, CT: 5, MR: 0)
+
+  [1/5] topcow_ct_008_0000.nii.gz | DSC: 0.7647 | clDice: 0.7675 | 15s
+  [2/5] topcow_ct_010_0000.nii.gz | DSC: 0.7206 | clDice: 0.6564 | 17s
+  [3/5] topcow_ct_001_0000.nii.gz | DSC: 0.6829 | clDice: 0.7024 | 17s
+  [4/5] topcow_ct_004_0000.nii.gz | DSC: 0.7687 | clDice: 0.7146 | 27s
+  [5/5] topcow_ct_023_0000.nii.gz | DSC: 0.7785 | clDice: 0.7520 | 22s
+
+Computing Fréchet Feature Distance over validation set...
+  F-FID: 0.0756  (caveat: N=5 is far below the ~10k samples needed for converged FID)
+
+============================================================
+GLOBAL METRICS (binary, averaged over validation set)
+============================================================
+             dice: 0.7431 +/- 0.0361
+           cldice: 0.7186 +/- 0.0391
+             hd95: 16.2515 +/- 6.6018
+     betti0_error: 278.2000 +/- 95.3318
+           ssim3d: 0.9841 +/- 0.0034
+             psnr: 28.2200 +/- 1.1481
+
+============================================================
+STRATIFIED METRICS (per vessel class, averaged over validation set)
+============================================================
+
+  Vessel              DSC     clDice      B0err     N
+  --------------------------------------------------
+  BA               0.8375     0.9241        3.2     5
+  R-PCA            0.8260     0.8750        2.6     5
+  L-PCA            0.8396     0.9119        2.6     5
+  R-ICA            0.8542     0.9133        0.4     5
+  R-MCA            0.8232     0.9408        0.0     4
+  L-ICA            0.8918     0.8858        1.2     4
+  L-MCA            0.8514     0.9138        0.8     4
+  R-Pcom           0.4662     0.5166        1.4     5
+  L-Pcom           0.3208     0.4545        1.0     1
+  Acom             0.4986     0.5961        0.2     4
+  R-ACA            0.7628     0.8264        3.4     5
+  L-ACA            0.7378     0.7745        3.2     5
+  3rd-A2              n/a        n/a        n/a     0
+  R-A3             0.6373     0.7180        2.8     5
+  L-A3             0.6908     0.7472        1.0     4
+  3rd-A3              n/a        n/a        n/a     0
+  R-M2             0.8095     0.8602       12.2     4
+  R-M3             0.5974     0.6855       10.2     4
+  L-M2             0.8098     0.9011        5.5     4
+  L-M3             0.5955     0.6722        4.8     4
+  R-P3P4           0.7453     0.8183        4.0     4
+  L-P3P4           0.6093     0.7194        2.4     5
+  R-VA             0.8557     0.9104        5.2     5
+  L-VA             0.7885     0.8587        2.4     5
+  R-SCA            0.2846     0.3610        3.4     5
+  L-SCA            0.2189     0.2701        3.4     5
+  R-AICA           0.2932     0.2473        4.0     3
+  L-AICA              n/a        n/a        n/a     0
+  R-PICA           0.5552     0.6528        5.5     4
+  L-PICA           0.5988     0.6916        5.0     5
+  R-AChA              n/a        n/a        n/a     0
+  L-AChA              n/a        n/a        n/a     0
+  R-OA             0.0000     0.0000        1.2     5
+  L-OA             0.0000     0.0000        1.2     4
+  VoG              0.4468     0.5819        1.6     5
+  StS              0.3662     0.4589        5.0     5
+  ICVs             0.2539     0.2498        8.0     5
+  R-BVR            0.4415     0.4318        1.0     2
+  L-BVR            0.4227     0.5577        0.5     2
+  SSS              0.7778     0.8380       29.2     5
+
+  Group                                                   DSC   clDice     N
+  --------------------------------------------------------------------------
+  Large CoW arteries (BA, ICA, M1, PCA, ACA)           0.8227   0.8830    42
+  Communicating arteries (Acom, Pcom, 3rd-A2)          0.4646   0.5422    10
+  Distal branches (A3, M2, M3, P3/P4)                  0.6831   0.7625    34
+  Posterior fossa (VA, SCA, AICA, PICA)                0.5260   0.5879    32
+  Small arteries (AChA, OA)                            0.0000   0.0000     9
+  Venous sinuses (VoG, StS, ICVs, BVR, SSS)            0.4563   0.5259    24
+
+  Gaps (large vessel DSC - other group DSC):
+    vs Communicating arteries (Acom, Pcom, 3rd-A2): +0.3581
+    vs Distal branches (A3, M2, M3, P3/P4): +0.1396
+    vs Posterior fossa (VA, SCA, AICA, PICA): +0.2967
+    vs Small arteries (AChA, OA): +0.8227
+    vs Venous sinuses (VoG, StS, ICVs, BVR, SSS): +0.3664
+
+Results saved to: runs/finetune_topbrain_dice_ce_mse_dt_20260429_005937/stratified_eval.json
