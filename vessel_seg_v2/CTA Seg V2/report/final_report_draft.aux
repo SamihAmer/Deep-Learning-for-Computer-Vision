@@ -2,7 +2,6 @@
 \providecommand\hyper@newdestlabel[2]{}
 \providecommand\HyField@AuxAddToFields[1]{}
 \providecommand\HyField@AuxAddToCoFields[2]{}
-\citation{chen2023}
 \citation{yang2023}
 \citation{isensee2021}
 \citation{isensee2024}
@@ -13,67 +12,56 @@
 \citation{qin2019basnet}
 \citation{mosinska2018}
 \citation{kervadec2021boundary}
-\citation{karimi2020hausdorff}
-\citation{shi2024cbd}
-\citation{acebes2024}
-\citation{berger2024,stucki2023}
-\citation{ma2021odyssey}
 \@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\citation{shi2024cbd}
+\citation{berger2024}
 \citation{yang2023}
 \citation{isensee2021,isensee2024}
-\citation{he2015}
+\citation{shit2021}
 \@writefile{toc}{\contentsline {section}{\numberline {II}Datasets}{2}{section.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}TopCoW 2024}{2}{subsection.2.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}TopBrain 2025}{2}{subsection.2.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level.}}{2}{figure.caption.1}\protected@file@percent }
-\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:architecture}{{1}{2}{3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level}{figure.caption.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {III}Methods}{2}{section.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Architecture: 3D U-Net}{2}{subsection.3.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Loss Functions: Topology-Aware Family}{2}{subsection.3.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}1}Dice + Cross-Entropy (Baseline)}{2}{subsubsection.3.2.1}\protected@file@percent }
-\citation{shit2021}
 \citation{kirchhoff2024}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level.}}{3}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:architecture}{{1}{3}{3D U-Net architecture with 5 encoder stages (32--512 channels), residual blocks, strided convolution downsampling, transposed convolution upsampling, skip connections, and deep supervision heads at each decoder level}{figure.caption.1}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}2}Dice + CE + Soft-clDice}{3}{subsubsection.3.2.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}3}Dice + CE + Skeleton Recall}{3}{subsubsection.3.2.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Preprocessing and Augmentation}{3}{subsection.3.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Training Procedure}{3}{subsection.3.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Training dynamics for the three topology-aware loss configurations over 300 epochs on 8$\times $A100 GPUs. \textbf  {Top:} Smoothed training loss. \textbf  {Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs).}}{3}{figure.caption.2}\protected@file@percent }
-\newlabel{fig:learning_curves}{{2}{3}{Training dynamics for the three topology-aware loss configurations over 300 epochs on 8$\times $A100 GPUs. \textbf {Top:} Smoothed training loss. \textbf {Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs)}{figure.caption.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Global Evaluation on TopCoW Validation Set --- Topology-Aware Family}}{3}{table.caption.3}\protected@file@percent }
 \newlabel{tab:global}{{I}{3}{Global Evaluation on TopCoW Validation Set --- Topology-Aware Family}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Training Procedure}{3}{subsection.3.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {IV}Experiments and Results: Topology-Aware Family}{3}{section.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Training Dynamics}{3}{subsection.4.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Global Metrics}{3}{subsection.4.2}\protected@file@percent }
-\citation{qin2019basnet}
 \citation{wang2004ssim}
-\citation{ma2021odyssey}
+\citation{qin2019basnet}
 \citation{kervadec2021boundary}
-\citation{karimi2020hausdorff}
+\citation{simonyan2015vgg}
 \citation{mosinska2018}
 \citation{johnson2016perceptual}
-\citation{simonyan2015vgg}
 \citation{qin2019basnet}
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-Vessel DSC --- Topology-Aware Family}}{4}{table.caption.4}\protected@file@percent }
-\newlabel{tab:stratified}{{II}{4}{Per-Vessel DSC --- Topology-Aware Family}{table.caption.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Large vs.\ Communicating Vessel Gap (From-Scratch)}}{4}{table.caption.5}\protected@file@percent }
-\newlabel{tab:gap}{{III}{4}{Large vs.\ Communicating Vessel Gap (From-Scratch)}{table.caption.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Training dynamics for the three topology-aware loss configurations over 300 epochs on 8$\times $A100 GPUs. \textbf  {Top:} Smoothed training loss. \textbf  {Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs).}}{4}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:learning_curves}{{2}{4}{Training dynamics for the three topology-aware loss configurations over 300 epochs on 8$\times $A100 GPUs. \textbf {Top:} Smoothed training loss. \textbf {Bottom:} Smoothed training Dice (lines) and validation Dice (markers, every 25 epochs)}{figure.caption.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-Vessel DSC --- Topology-Aware Family. 3rd-A2 has only N=2 cases; differences are not interpretable.}}{4}{table.caption.4}\protected@file@percent }
+\newlabel{tab:stratified}{{II}{4}{Per-Vessel DSC --- Topology-Aware Family. 3rd-A2 has only N=2 cases; differences are not interpretable}{table.caption.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Stratified Per-Vessel Analysis}{4}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces TopBrain Fine-Tuned Models: DSC by Vessel Group --- Topology-Aware Family}}{4}{table.caption.5}\protected@file@percent }
+\newlabel{tab:topbrain}{{III}{4}{TopBrain Fine-Tuned Models: DSC by Vessel Group --- Topology-Aware Family}{table.caption.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}TopBrain Fine-Tuning}{4}{subsection.4.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {V}Extended Loss Function Investigation}{4}{section.5}\protected@file@percent }
 \newlabel{sec:extended_losses}{{V}{4}{Extended Loss Function Investigation}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Dice + CE + 3D Structural Similarity}{4}{subsection.5.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces TopBrain Fine-Tuned Models: DSC by Vessel Group --- Topology-Aware Family}}{4}{table.caption.6}\protected@file@percent }
-\newlabel{tab:topbrain}{{IV}{4}{TopBrain Fine-Tuned Models: DSC by Vessel Group --- Topology-Aware Family}{table.caption.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Dice + CE + MSE-on-Distance-Transform}{4}{subsection.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Dice + CE + 2D Slice-Wise Perceptual}{4}{subsection.5.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Training Dynamics, Extended Family}{4}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Three Reconstruction-Aware Losses}{4}{subsection.5.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Reconstruction-Aware Evaluation and Combination Loss}{4}{section.6}\protected@file@percent }
 \newlabel{sec:extended_eval}{{VI}{4}{Reconstruction-Aware Evaluation and Combination Loss}{section.6}{}}
-\citation{heusel2017fid}
 \citation{qin2019basnet}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Training-loss curves for all six single-objective configurations and the combination over 300 epochs on 8$\times $A100 GPUs. The three topology-aware losses (Dice+CE, +clDice, +Skeleton Recall) and the three reconstruction-aware losses (+SSIM, +MSE-DT, +Perceptual) converge to similar final training loss; +MSE-DT trains at the highest absolute loss throughout because the MSE-on-distance-transform term has a different scale than the Dice and CE components. All seven runs are stable under cosine annealing with 10-epoch warmup; no NaN batches occurred over $\sim $5.7M training samples.}}{5}{figure.caption.7}\protected@file@percent }
-\newlabel{fig:learning_curves_extended}{{3}{5}{Training-loss curves for all six single-objective configurations and the combination over 300 epochs on 8$\times $A100 GPUs. The three topology-aware losses (Dice+CE, +clDice, +Skeleton Recall) and the three reconstruction-aware losses (+SSIM, +MSE-DT, +Perceptual) converge to similar final training loss; +MSE-DT trains at the highest absolute loss throughout because the MSE-on-distance-transform term has a different scale than the Dice and CE components. All seven runs are stable under cosine annealing with 10-epoch warmup; no NaN batches occurred over $\sim $5.7M training samples}{figure.caption.7}{}}
+\citation{mosinska2018}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Training loss (top, from epoch 10) and validation DSC (bottom) for all seven configurations on 8$\times $A100. +Perceptual trains at higher absolute loss because the VGG-feature L2 has a different scale.}}{5}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:learning_curves_extended}{{3}{5}{Training loss (top, from epoch 10) and validation DSC (bottom) for all seven configurations on 8$\times $A100. +Perceptual trains at higher absolute loss because the VGG-feature L2 has a different scale}{figure.caption.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}New Evaluation Metrics}{5}{subsection.6.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Combination Loss: Dice + CE + clDice + SSIM}{5}{subsection.6.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Extended Results Table}{5}{subsection.6.3}\protected@file@percent }
@@ -85,26 +73,19 @@
 \bibcite{isensee2024}{4}
 \bibcite{kirchhoff2024}{5}
 \bibcite{shi2024cbd}{6}
-\bibcite{acebes2024}{7}
-\bibcite{berger2024}{8}
-\bibcite{stucki2023}{9}
-\bibcite{chen2023}{10}
-\bibcite{he2015}{11}
-\bibcite{wang2004ssim}{12}
-\bibcite{qin2019basnet}{13}
-\bibcite{mosinska2018}{14}
-\bibcite{kervadec2021boundary}{15}
-\bibcite{karimi2020hausdorff}{16}
-\bibcite{johnson2016perceptual}{17}
-\bibcite{simonyan2015vgg}{18}
-\bibcite{heusel2017fid}{19}
-\bibcite{ma2021odyssey}{20}
-\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Extended evaluation on TopCoW validation set (N=25). Higher is better except HD95, B0 err, and F-FID. Bold = best in column; ties jointly bolded. Per-volume standard deviations are 6--12\% of the mean for DSC/clDice and 5--40\% for B0 err.}}{6}{table.caption.8}\protected@file@percent }
-\newlabel{tab:extended}{{V}{6}{Extended evaluation on TopCoW validation set (N=25). Higher is better except HD95, B0 err, and F-FID. Bold = best in column; ties jointly bolded. Per-volume standard deviations are 6--12\% of the mean for DSC/clDice and 5--40\% for B0 err}{table.caption.8}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces TopBrain Fine-Tuned Models: DSC by Vessel Group --- All Seven Configurations (best per row in bold; SSIM+TB ties Skeleton on large CoW arteries by 0.002).}}{6}{table.caption.9}\protected@file@percent }
-\newlabel{tab:topbrain_extended}{{VI}{6}{TopBrain Fine-Tuned Models: DSC by Vessel Group --- All Seven Configurations (best per row in bold; SSIM+TB ties Skeleton on large CoW arteries by 0.002)}{table.caption.9}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces TopBrain fine-tuned DSC by vessel group across all seven configurations. Skeleton Recall (green) wins five of six groups; on small arteries, it is the only model that segments these structures at all (0.589 DSC vs.\ $\leq $0.011 for every other model).}}{6}{figure.caption.10}\protected@file@percent }
-\newlabel{fig:topbrain_extended}{{4}{6}{TopBrain fine-tuned DSC by vessel group across all seven configurations. Skeleton Recall (green) wins five of six groups; on small arteries, it is the only model that segments these structures at all (0.589 DSC vs.\ $\leq $0.011 for every other model)}{figure.caption.10}{}}
+\bibcite{berger2024}{7}
+\bibcite{wang2004ssim}{8}
+\bibcite{qin2019basnet}{9}
+\bibcite{mosinska2018}{10}
+\bibcite{kervadec2021boundary}{11}
+\bibcite{johnson2016perceptual}{12}
+\bibcite{simonyan2015vgg}{13}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Extended evaluation on TopCoW validation set (N=25). Higher is better except HD95, B0 err, and F-FID. Bold = best in column; ties jointly bolded. Per-volume standard deviations are 6--12\% of the mean for DSC/clDice and 5--40\% for B0 err.}}{6}{table.caption.7}\protected@file@percent }
+\newlabel{tab:extended}{{IV}{6}{Extended evaluation on TopCoW validation set (N=25). Higher is better except HD95, B0 err, and F-FID. Bold = best in column; ties jointly bolded. Per-volume standard deviations are 6--12\% of the mean for DSC/clDice and 5--40\% for B0 err}{table.caption.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces TopBrain Fine-Tuned Models: DSC by Vessel Group --- All Seven Configurations (best per row in bold; on Large CoW SSIM is best at 0.834, only 0.002 above the Dice+CE baseline at 0.832).}}{6}{table.caption.8}\protected@file@percent }
+\newlabel{tab:topbrain_extended}{{V}{6}{TopBrain Fine-Tuned Models: DSC by Vessel Group --- All Seven Configurations (best per row in bold; on Large CoW SSIM is best at 0.834, only 0.002 above the Dice+CE baseline at 0.832)}{table.caption.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces TopBrain fine-tuned DSC by vessel group across all seven configurations. Skeleton Recall (green) wins five of six groups; on small arteries, it is the only model that segments these structures at all (0.589 vs.\ $\leq $0.011 for every other model).}}{6}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:topbrain_extended}{{4}{6}{TopBrain fine-tuned DSC by vessel group across all seven configurations. Skeleton Recall (green) wins five of six groups; on small arteries, it is the only model that segments these structures at all (0.589 vs.\ $\leq $0.011 for every other model)}{figure.caption.9}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{6}{section.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{References}{6}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{6}{section*.10}\protected@file@percent }
 \gdef \@abspage@last{6}

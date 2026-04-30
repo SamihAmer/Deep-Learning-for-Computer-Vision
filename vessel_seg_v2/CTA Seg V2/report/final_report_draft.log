@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  28 APR 2026 21:21
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2026.4.8)  29 APR 2026 20:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -600,8 +600,16 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 35.
 (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-[1{C:/Users/Samih/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/Sa
-mih/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc}
+LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 3
+5.
+
+(C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ts1ptm.fd
+File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
+)
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [1{C:/Users/Samih/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/S
+amih/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc}
 
 
 ]
@@ -614,51 +622,71 @@ Underfull \hbox (badness 2393) in paragraph at lines 62--63
 \OT1/ptm/m/n/10 test-ing whether topology-aware and reconstruction-
  []
 
-<figures/unet3d_architecture.pdf, id=167, 252.945pt x 180.675pt>
+<figures/unet3d_architecture.pdf, id=140, 252.945pt x 180.675pt>
 File: figures/unet3d_architecture.pdf Graphic file (type pdf)
 <use figures/unet3d_architecture.pdf>
 Package pdftex.def Info: figures/unet3d_architecture.pdf  used on input line 86
 .
 (pdftex.def)             Requested size: 252.0pt x 180.00462pt.
-[2 <./figures/unet3d_architecture.pdf>]
+[2]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 1
 20.
-
-(C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ot1pcr.fd
+ (C:\Users\Samih\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
-<figures/learning_curves.pdf, id=234, 240.17354pt x 276.49391pt>
+<figures/learning_curves.pdf, id=167, 240.17354pt x 276.49391pt>
 File: figures/learning_curves.pdf Graphic file (type pdf)
 <use figures/learning_curves.pdf>
-Package pdftex.def Info: figures/learning_curves.pdf  used on input line 145.
+Package pdftex.def Info: figures/learning_curves.pdf  used on input line 147.
 (pdftex.def)             Requested size: 252.0pt x 290.10777pt.
 
-[3 <./figures/learning_curves.pdf>]
-<figures_v4/learning_curves_extended.pdf, id=303, 505.89pt x 390.25798pt>
+[3 <./figures/unet3d_architecture.pdf>]
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+
+Underfull \hbox (badness 6758) in paragraph at lines 229--230
+[]\OT1/ptm/m/n/10 We ex-tend the topology-aware ab-la-tion with three
+ []
+
+
+Underfull \hbox (badness 2635) in paragraph at lines 233--234
+\OT1/ptm/m/n/10 ad-di-tional term at $\OML/cmm/m/it/10 []\OT1/cmr/m/n/10 0\OML
+/cmm/m/it/10 :\OT1/cmr/m/n/10 5$\OT1/ptm/m/n/10 . \OT1/ptm/b/n/10 Dice+CE+SSIM 
+\OT1/ptm/m/n/10 adds $\OT1/cmr/m/n/10 (1 \OMS/cmsy/m/n/10 ^^@
+ []
+
+
+Underfull \hbox (badness 1558) in paragraph at lines 233--234
+[][]\OT1/cmr/m/n/10 ([]\OML/cmm/m/it/10 ; g\OT1/cmr/m/n/10 ))$ \OT1/ptm/m/n/10 
+on the soft-max fore-ground prob-a-bil-ity $[]$
+ []
+
+<figures_v4/learning_curves_extended.pdf, id=235, 505.89pt x 390.25798pt>
 File: figures_v4/learning_curves_extended.pdf Graphic file (type pdf)
 <use figures_v4/learning_curves_extended.pdf>
 Package pdftex.def Info: figures_v4/learning_curves_extended.pdf  used on input
- line 279.
+ line 237.
 (pdftex.def)             Requested size: 252.0pt x 194.40201pt.
- [4]
-Underfull \hbox (badness 1668) in paragraph at lines 302--303
+[4 <./figures/learning_curves.pdf>]
+Underfull \hbox (badness 1668) in paragraph at lines 260--261
 []\OT1/ptm/m/n/10 The com-bi-na-tion con-fig-u-ra-tion $\OMS/cmsy/m/n/10 L[] \O
 T1/cmr/m/n/10 = 0\OML/cmm/m/it/10 :\OT1/cmr/m/n/10 5 \OMS/cmsy/m/n/10 L[] \OT1/
 cmr/m/n/10 +
  []
 
 
-Underfull \hbox (badness 1917) in paragraph at lines 327--328
-[]\OT1/ptm/m/n/10 Second, the three reconstruction-aware losses pro-duce
+Underfull \hbox (badness 2828) in paragraph at lines 285--286
+[]\OT1/ptm/m/n/10 The three reconstruction-aware losses pro-duce SSIM,
  []
 
-<figures_v4/topbrain_extended_groups.pdf, id=325, 520.34402pt x 303.534pt>
+[5 <./figures_v4/learning_curves_extended.pdf>]
+<figures_v4/topbrain_extended_groups.pdf, id=351, 520.34402pt x 303.534pt>
 File: figures_v4/topbrain_extended_groups.pdf Graphic file (type pdf)
 <use figures_v4/topbrain_extended_groups.pdf>
 Package pdftex.def Info: figures_v4/topbrain_extended_groups.pdf  used on input
- line 359.
+ line 317.
 (pdftex.def)             Requested size: 252.0pt x 147.00075pt.
-[5 <./figures_v4/learning_curves_extended.pdf>]
+
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -676,16 +704,16 @@ LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
  ***********
 Package rerunfilecheck Info: File `final_report_draft.out' has not changed.
-(rerunfilecheck)             Checksum: 6F6F1A25325118D7937CA2EB065F8A9A;5692.
+(rerunfilecheck)             Checksum: 9C91EC50292CC20AF9713B6B88951380;4917.
  ) 
 Here is how much of TeX's memory you used:
- 16849 strings out of 474486
- 335210 string characters out of 5743756
- 1957542 words of memory out of 5000000
- 38871 multiletter control sequences out of 15000+600000
- 600271 words of font info for 121 fonts, out of 8000000 for 9000
+ 16850 strings out of 474486
+ 335267 string characters out of 5743756
+ 1954542 words of memory out of 5000000
+ 38883 multiletter control sequences out of 15000+600000
+ 600896 words of font info for 123 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,11n,79p,1846b,1037s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,11n,79p,2679b,1033s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/
 cmbx10.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/ams
 fonts/cm/cmex10.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/p
@@ -694,21 +722,20 @@ s/type1/public/amsfonts/cm/cmmi7.pfb><C:/Users/Samih/AppData/Local/Programs/MiK
 TeX/fonts/type1/public/amsfonts/cm/cmmi9.pfb><C:/Users/Samih/AppData/Local/Prog
 rams/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Users/Samih/AppData/Lo
 cal/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr7.pfb><C:/Users/Samih/App
-Data/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr8.pfb><C:/Users/Sa
-mih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr9.pfb><C:/U
-sers/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.
-pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/c
-m/cmsy7.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/am
-sfonts/cm/cmsy8.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/p
-ublic/amsfonts/cm/cmsy9.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts
-/type1/urw/courier/ucrr8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fon
-ts/type1/urw/times/utmb8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fon
-ts/type1/urw/times/utmbi8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fo
-nts/type1/urw/times/utmr8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fo
-nts/type1/urw/times/utmri8a.pfb>
-Output written on final_report_draft.pdf (6 pages, 376826 bytes).
+Data/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr9.pfb><C:/Users/Sa
+mih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:
+/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy7
+.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/
+cm/cmsy8.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/public/a
+msfonts/cm/cmsy9.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type1/
+urw/courier/ucrr8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type
+1/urw/times/utmb8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/type
+1/urw/times/utmbi8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/typ
+e1/urw/times/utmr8a.pfb><C:/Users/Samih/AppData/Local/Programs/MiKTeX/fonts/typ
+e1/urw/times/utmri8a.pfb>
+Output written on final_report_draft.pdf (6 pages, 364215 bytes).
 PDF statistics:
- 541 PDF objects out of 1000 (max. 8388607)
- 81 named destinations out of 1000 (max. 500000)
- 253 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 499 PDF objects out of 1000 (max. 8388607)
+ 65 named destinations out of 1000 (max. 500000)
+ 229 words of extra memory for PDF output out of 10000 (max. 10000000)
 
