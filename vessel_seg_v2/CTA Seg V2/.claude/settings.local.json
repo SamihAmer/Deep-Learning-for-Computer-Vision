@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(find 'C:\\\\Users\\\\Samih\\\\Deep-Learning-for-Computer-Vision\\\\vessel_seg_v2\\\\CTA Seg V2' -type f \\\\\\(-name *.md -o -name *.txt -o -name *.yaml -o -name *.yml -o -name *.json -o -name *.cfg -o -name requirements* \\\\\\))",
-      "Bash(DATA=\"C:\\\\Users\\\\Samih\\\\Deep-Learning-for-Computer-Vision\\\\vessel_seg_v2\\\\CTA Seg V2\\\\data\\\\TopCoW2024_Data_Release\")",
-      "Read(//c/Users/Samih/Deep-Learning-for-Computer-Vision/vessel_seg_v2/CTA Seg V2/**)"
-    ]
-  }
-}
